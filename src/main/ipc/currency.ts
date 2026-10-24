@@ -25,7 +25,9 @@ async function scan(): Promise<CurrencyScanResult> {
   if (!langDir) throw new Error('OCR language data (resources/ocr/eng.traineddata) is missing')
   for (const png of images) {
     const r = await readCurrencyWindow(png, langDir)
-    if (!('error' in r)) return { ok: true, ...r }
+    if (!('error' in r)) {
+      return { ok: true, ...r, zeroed: currencyVocabulary().filter((n) => !(n in r.counts)) }
+    }
   }
   return { ok: false, error: 'not-currency-window' }
 }

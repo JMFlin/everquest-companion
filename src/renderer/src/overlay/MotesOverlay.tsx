@@ -34,7 +34,9 @@ export default function MotesOverlay(): JSX.Element {
       setScan(r)
       setStatus(
         r.ok
-          ? `Read ${Object.keys(r.counts).length} items${r.unmatched.length ? `, ${r.unmatched.length} unreadable` : ''}.`
+          ? r.unmatched.length
+            ? `${r.unmatched.length} unreadable rows — rescan (Confirm would store them as 0).`
+            : `Read ${Object.keys(r.counts).length} items${r.zeroed.length ? `; ${r.zeroed.length} not listed → 0` : ''}.`
           : r.error === 'eq-window-not-found'
             ? 'No EverQuest window found.'
             : 'Currency list not found in the game window.'
@@ -79,7 +81,7 @@ export default function MotesOverlay(): JSX.Element {
           <button style={BUTTON} disabled={busy} onClick={() => void runScan()} data-testid="motes-overlay-scan">
             Scan
           </button>
-          {scan?.ok && (
+          {scan?.ok && scan.unmatched.length === 0 && (
             <button style={BUTTON} onClick={() => void confirm(scan.counts)} data-testid="motes-overlay-confirm">
               Confirm
             </button>

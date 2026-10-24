@@ -143,7 +143,8 @@ export default function MotesView(): JSX.Element {
     return h
   }, [rowsByKey])
   const runes = useMemo(
-    () => inventoryRows.filter((r) => r.key.startsWith('wind rune ')),
+    // Real rune names only: the log also yields junk keys like "wind rune jaka from reward chest".
+    () => inventoryRows.filter((r) => /^wind rune [a-z]+$/.test(r.key)),
     [inventoryRows]
   )
   const scannedAt = rowsByKey.get(MOTES[0].name.toLowerCase())?.override?.setAt
