@@ -505,6 +505,7 @@ kept, in one line.
 The world-model laws below are still the law — they describe what the fold MEANS, and every one of
 them was ported to Rust and proven deep-equal on six slices of the real log before the TypeScript
 copy was deleted. Where one names a TypeScript file that is gone, read it for the RULE.
+Motes (currency scan + upgrade planner): docs/plans/mote-planner.md.
 Maps: src/main/maps (pack discovery/per-layer cross-pack merge/LRU/search,
 Electron-free w/ injected roots) over shared/maps types + shared/zones
 (THE zone-knowledge table); renderer features/maps (canvas geometry, DOM
