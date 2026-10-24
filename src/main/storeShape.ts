@@ -294,4 +294,9 @@ export interface StoreShape {
    * importing a friend's answer to that is not a setting anyone wanted.
    */
   uiScale?: number
+  /**
+   * Background currency-window rescans on the Motes tab and overlay. Additive + optional: absent
+   * reads as off, the default.
+   */
+  autoRescan?: boolean
 }

@@ -197,6 +197,11 @@ function locateHeader(img: Rgba, fingerprints: readonly Fingerprint[]): Header |
   return null
 }
 
+/** Whether a capture shows a saved fingerprint, by pixels alone: no OCR, about half a second. */
+export function showsCurrencyWindow(png: Buffer, fingerprints: readonly Fingerprint[]): boolean {
+  return locateHeader(decodePng(png), fingerprints) !== null
+}
+
 function scaled(h: Header, k: number): Header {
   const box = (b: Box): Box => ({ x0: b.x0 * k, y0: b.y0 * k, x1: b.x1 * k, y1: b.y1 * k })
   return { name: box(h.name), expansion: box(h.expansion), quantity: box(h.quantity) }

@@ -11,6 +11,7 @@ import { MOTES, SPARE_MAX_TIER, type SectionPlan } from '@shared/planner/motes'
 import type { LootSnap } from '@shared/types'
 import { heldMotes } from '../features/motes/heldMotes'
 import { scanSummary } from '../features/motes/ScanPreview'
+import { useAutoRescan } from '../features/motes/useAutoRescan'
 import { RANKS, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type RankPick } from '../features/motes/usePlanner'
 import { useOverlayChrome } from './useOverlayChrome'
 import { useOverlayModule } from './useOverlayModule'
@@ -124,6 +125,7 @@ export default function MotesOverlay(): JSX.Element {
   const statements = useHeldStatements()
   const held = useMemo(() => heldMotes(loot, statements), [loot, statements])
   const p = usePlanner(held)
+  const auto = useAutoRescan(window.eqOverlay)
   useEffect(() => {
     void window.eqOverlay.warmCurrencyScan()
   }, [])
@@ -172,6 +174,16 @@ export default function MotesOverlay(): JSX.Element {
           )}
           <span style={{ color: DIM }}>{status}</span>
         </div>
+        <label style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 4 }}>
+          <input
+            type="checkbox"
+            checked={auto.enabled}
+            onChange={(e) => auto.setEnabled(e.target.checked)}
+            data-testid="motes-overlay-auto-rescan"
+          />
+          Auto rescan every 45 s
+          {auto.note && <span style={{ color: '#8fd18f' }}>· {auto.note}</span>}
+        </label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: 12, margin: '6px 0' }}>
           {MOTES.map((m) => (
             <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between' }}>

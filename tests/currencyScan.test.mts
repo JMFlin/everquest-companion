@@ -5,7 +5,7 @@ import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createCurrencyReader, findHeader, type CurrencyReader } from '../src/main/currencyScan/index'
+import { createCurrencyReader, findHeader, showsCurrencyWindow, type CurrencyReader } from '../src/main/currencyScan/index'
 import { decodePng, encodePng } from '../src/main/currencyScan/png'
 import { locateFingerprint } from '../src/main/currencyScan/locate'
 import { crop, resize } from '../src/main/currencyScan/raster'
@@ -109,6 +109,14 @@ test('a remembered fingerprint finds the window by pixels and reads it the same'
   assert.ok(inWindow)
   assert.deepEqual(locateFingerprint(canvas, first.fingerprint.strip), { x: inWindow.x + ox, y: inWindow.y + oy })
   assertReads(await reader.read(encodePng(canvas), [first.fingerprint]), EXPECTED)
+})
+
+test('the background check sees the window by its saved fingerprint, and nothing without one', async () => {
+  const first = await reader.read(FIXTURE)
+  assert.ok(!('error' in first))
+  assert.equal(showsCurrencyWindow(FIXTURE, [first.fingerprint]), true)
+  assert.equal(showsCurrencyWindow(encodePng(blackCanvas(800, 600)), [first.fingerprint]), false)
+  assert.equal(showsCurrencyWindow(FIXTURE, []), false)
 })
 
 test('a fingerprint that is not in the capture is no match', () => {

@@ -1,19 +1,21 @@
 // IPC: scan the EverQuest currency window. A scan that reads every row is saved at once as
 // held-count statements: EVERY vocabulary item (an item the window did not list is 0), dated now,
-// so loot after it still counts forward (shared/itemOverrides.ts).
+// so loot after it still counts forward (shared/itemOverrides.ts). With auto rescan on, the game is
+// captured every AUTO_RESCAN_MS and read only when a saved fingerprint shows the window is open.
 
 import { app, ipcMain } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { IPC } from '../../shared/ipc'
-import type { CurrencyScanResult } from '../../shared/currencyScan'
+import type { AutoRescanState, CurrencyScanResult } from '../../shared/currencyScan'
 import { captureEqImages } from '../currencyScan/captureEqWindow'
-import { createCurrencyReader, findOcrLangDir, type CurrencyReader, type Fingerprint } from '../currencyScan'
+import { createCurrencyReader, findOcrLangDir, showsCurrencyWindow, type CurrencyReader, type CurrencyScan, type Fingerprint } from '../currencyScan'
 import { currencyVocabulary } from '../currencyScan/vocabulary'
-import { mergeReads, type WindowRead } from '../currencyScan/merge'
-import { logInfo } from '../errorLog'
+import { mergeReads } from '../currencyScan/merge'
+import { logError, logInfo } from '../errorLog'
 import { decodePng, encodePng } from '../currencyScan/png'
 import { activeCharId } from '../session'
+import { settingsStore } from '../store'
 import { getItemOverrides, setItemOverride } from '../storeItemOverrides'
 import { getOverlayWindow, sendToMain } from '../windows'
 
@@ -98,7 +100,8 @@ function savedStrips(dir: string): string[] {
     .map(({ f }) => f)
 }
 
-async function scan(): Promise<CurrencyScanResult> {
+/** `background`: an auto rescan, which reads only captures a saved fingerprint matches. */
+async function scan(background: boolean): Promise<CurrencyScanResult> {
   const mine = generation
   let answer = (): void => undefined
   const stopped = new Promise<CurrencyScanResult>((resolve) => {
@@ -106,7 +109,7 @@ async function scan(): Promise<CurrencyScanResult> {
     waiting.add(answer)
   })
   try {
-    const work = scanOnce(() => mine !== generation)
+    const work = scanOnce(() => mine !== generation, background)
     // A cancelled scan's work is abandoned, not awaited: its late failure must not go unhandled.
     work.catch(() => undefined)
     return await Promise.race([work, stopped])
@@ -115,17 +118,22 @@ async function scan(): Promise<CurrencyScanResult> {
   }
 }
 
-async function scanOnce(cancelled: () => boolean): Promise<CurrencyScanResult> {
-  const ocr = useReader()
-  const { images, minimized } = await captureEqImages()
+async function scanOnce(cancelled: () => boolean, background: boolean): Promise<CurrencyScanResult> {
+  // A Scan press starts the workers alongside the capture; a background rescan only once it matched.
+  const early = background ? null : useReader()
+  const { images: captured, minimized } = await captureEqImages()
   if (minimized) return { ok: false, error: 'eq-minimized' }
-  if (images.length === 0) return { ok: false, error: 'eq-window-not-found' }
-  // The last scan's captures stay on disk (overwritten each scan) so a misread can be inspected.
+  if (captured.length === 0) return { ok: false, error: 'eq-window-not-found' }
   const dir = scanDir()
+  const fingerprints = loadFingerprints(dir)
+  const images = background ? captured.filter((png) => showsCurrencyWindow(png, fingerprints)) : captured
+  if (images.length === 0) return { ok: false, error: 'not-currency-window' }
+  // The last scan's captures stay on disk (overwritten each scan) so a misread can be inspected.
   images.forEach((png, i) => writeFileSync(join(dir, `capture-${i}.png`), png))
-  const reads = await readCaptures(await ocr, images, dir, cancelled)
+  const reads = await readCaptures(await (early ?? useReader()), images, fingerprints, cancelled)
   if (reads === 'cancelled') return { ok: false, error: 'cancelled' }
   if (reads.length === 0) return { ok: false, error: 'not-currency-window' }
+  saveFingerprint(dir, reads[0].fingerprint)
   const merged = mergeReads(reads)
   const zeroed = currencyVocabulary().filter((n) => !(n in merged.counts))
   // A complete read is saved at once; an unreadable row would be stated as 0, so otherwise nothing
@@ -142,11 +150,10 @@ async function scanOnce(cancelled: () => boolean): Promise<CurrencyScanResult> {
 async function readCaptures(
   ocr: CurrencyReader,
   images: readonly Buffer[],
-  dir: string,
+  fingerprints: readonly Fingerprint[],
   cancelled: () => boolean
-): Promise<WindowRead[] | 'cancelled'> {
-  const fingerprints = loadFingerprints(dir)
-  const reads: WindowRead[] = []
+): Promise<Extract<CurrencyScan, { counts: unknown }>[] | 'cancelled'> {
+  const reads: Extract<CurrencyScan, { counts: unknown }>[] = []
   for (const [i, png] of images.entries()) {
     if (cancelled()) return 'cancelled'
     const r = await ocr.read(png, fingerprints)
@@ -158,7 +165,6 @@ async function readCaptures(
     logInfo(
       `[currency-scan] capture-${i}: ${Object.keys(r.counts).length} rows read${r.unmatched.length ? `, unreadable: ${r.unmatched.join(' / ')}` : ''}`
     )
-    if (reads.length === 0) saveFingerprint(dir, r.fingerprint)
     reads.push(r)
     if (mergeReads(reads).complete) break
   }
@@ -179,13 +185,60 @@ function state(counts: Record<string, number>): void {
   getOverlayWindow('motes')?.webContents.send(IPC.onHeldStatements)
 }
 
+const AUTO_RESCAN_MS = 45_000
+
+let autoTimer: NodeJS.Timeout | null = null
+let autoUpdatedAt: number | null = null
+/** The background rescan in flight; a Scan press waits for it instead of sharing the workers. */
+let background: Promise<void> | null = null
+
+function autoRescanState(): AutoRescanState {
+  return { enabled: settingsStore.get('autoRescan') ?? false, updatedAt: autoUpdatedAt }
+}
+
+function pushAutoRescan(): void {
+  const s = autoRescanState()
+  sendToMain(IPC.onAutoRescan, s)
+  getOverlayWindow('motes')?.webContents.send(IPC.onAutoRescan, s)
+}
+
+function scheduleAutoRescan(): void {
+  if (autoTimer) clearInterval(autoTimer)
+  autoTimer = autoRescanState().enabled ? setInterval(autoRescan, AUTO_RESCAN_MS) : null
+}
+
+function autoRescan(): void {
+  if (background || waiting.size > 0) return
+  background = scan(true)
+    .then((r) => {
+      if (!r.ok || !r.saved) return
+      autoUpdatedAt = Date.now()
+      pushAutoRescan()
+    })
+    .catch((e: unknown) => logError('currency-auto-rescan', e))
+    .finally(() => {
+      background = null
+    })
+}
+
 export function registerCurrencyIpc(): void {
+  scheduleAutoRescan()
+  ipcMain.handle(IPC.getAutoRescan, () => autoRescanState())
+  ipcMain.handle(IPC.setAutoRescan, (_e, enabled: boolean) => {
+    settingsStore.set('autoRescan', enabled)
+    scheduleAutoRescan()
+    pushAutoRescan()
+    return autoRescanState()
+  })
   // A surface that offers Scan asks for this when it opens: the workers load while the user lines
   // up the game window, not after they press the button.
   ipcMain.handle(IPC.warmCurrencyScan, async () => {
     await useReader()
   })
-  ipcMain.handle(IPC.scanCurrency, () => scan())
+  ipcMain.handle(IPC.scanCurrency, async () => {
+    await background
+    return scan(false)
+  })
   ipcMain.handle(IPC.cancelCurrencyScan, () => {
     cancel()
   })

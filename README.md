@@ -24,6 +24,8 @@ off logging, the app simply has nothing to show.
 - **Buff timers** — remaining time on buffs, learned from the log *(early — still rough)*.
 - **Motes** — scan the in-game currency window (a Scan button on the Motes overlay or tab) to
   read how many motes you hold; a full read is saved at once and loot after it keeps counting.
+  Tick **Auto rescan** (remembered between sessions) and the app checks the game every 45 s,
+  re-reading the window whenever it is open.
   The upgrade planner takes a spell's or gear piece's current rank and goal and lists which motes
   to apply, wasting the least XP. The scan is a screenshot of the game window read by local OCR —
   nothing leaves your machine.

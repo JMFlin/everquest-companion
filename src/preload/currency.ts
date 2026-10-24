@@ -5,7 +5,7 @@
 
 import { ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
-import type { CurrencyScanResult } from '../shared/currencyScan'
+import type { AutoRescanState, CurrencyScanResult } from '../shared/currencyScan'
 import type { ProgressState } from '../shared/types'
 import type { ItemCountOverride } from '../shared/itemOverrides'
 
@@ -24,6 +24,15 @@ export const scanBridge = {
     const listener = (): void => cb()
     ipcRenderer.on(IPC.onHeldStatements, listener)
     return () => ipcRenderer.removeListener(IPC.onHeldStatements, listener)
+  },
+  getAutoRescan: (): Promise<AutoRescanState> => ipcRenderer.invoke(IPC.getAutoRescan),
+  /** Turn background rescans on or off; persisted across sessions. */
+  setAutoRescan: (enabled: boolean): Promise<AutoRescanState> => ipcRenderer.invoke(IPC.setAutoRescan, enabled),
+  /** Background rescans were toggled (here or on the other surface) or saved new counts. */
+  onAutoRescan: (cb: (s: AutoRescanState) => void): (() => void) => {
+    const listener = (_e: unknown, s: AutoRescanState): void => cb(s)
+    ipcRenderer.on(IPC.onAutoRescan, listener)
+    return () => ipcRenderer.removeListener(IPC.onAutoRescan, listener)
   }
 }
 

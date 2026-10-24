@@ -37,6 +37,11 @@ export const IPC = {
   getHeldStatements: 'currency:getStatements',
   // main -> motes overlay: a scan was saved; re-read the statements.
   onHeldStatements: 'currency:statementsChanged',
+  // renderer -> main: background rescans' AutoRescanState; set takes `enabled` and is persisted.
+  getAutoRescan: 'currency:getAutoRescan',
+  setAutoRescan: 'currency:setAutoRescan',
+  // main -> Motes tab + motes overlay: the AutoRescanState changed (toggled, or counts updated).
+  onAutoRescan: 'currency:autoRescanChanged',
   // main -> renderer: progress changed (quest completion / inventory), so every
   // view that shows progress stays consistent without re-fetching on a timer.
   onProgress: 'progress:changed',

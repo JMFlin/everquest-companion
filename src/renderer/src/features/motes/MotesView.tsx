@@ -8,7 +8,9 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
+  FormControlLabel,
   Paper,
   Stack,
   Table,
@@ -25,6 +27,7 @@ import { useProgress } from '../posky/useProgress'
 import { ScanPreview } from './ScanPreview'
 import { GearExtras } from './GearExtras'
 import { heldMotes } from './heldMotes'
+import { useAutoRescan } from './useAutoRescan'
 import { RANKS, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type RankPick } from './usePlanner'
 
 function RankPicker(props: { label: string; pick: RankPick; onPick: (n: number) => void }): JSX.Element {
@@ -100,6 +103,7 @@ export default function MotesView(): JSX.Element {
   useEffect(() => {
     void window.eq.warmCurrencyScan()
   }, [])
+  const auto = useAutoRescan(window.eq)
   const [scan, setScan] = useState<CurrencyScanResult | null>(null)
   const [scanning, setScanning] = useState(false)
   const runScan = async (): Promise<void> => {
@@ -127,6 +131,18 @@ export default function MotesView(): JSX.Element {
               Stop
             </Button>
           )}
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={auto.enabled}
+                onChange={(e) => auto.setEnabled(e.target.checked)}
+                data-testid="motes-auto-rescan"
+              />
+            }
+            label="Auto rescan every 45 s"
+          />
+          {auto.note && <Typography variant="body2" color="success.main">{auto.note}</Typography>}
         </Stack>
         {scan && <ScanPreview result={scan} onClose={() => setScan(null)} />}
         <Alert severity="info" sx={{ my: 1 }}>
