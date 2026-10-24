@@ -69,12 +69,15 @@ export default defineConfig({
         //     main does not. Two threads late in the same half second means the MACHINE stalled;
         //     only main late means we did. A rollup into index.js would leave the verdict
         //     unmeasurable, which is the strongest form of "this needs its own entry".
+        //   * printWindowWorker — the currency scan's PrintWindow capture. Main never loads koffi
+        //     (presenceNative.ts), so the native GDI calls get a thread of their own.
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           speechWorker: resolve(__dirname, 'src/main/speech/worker.ts'),
           presenceWorker: resolve(__dirname, 'src/main/presenceWorker.ts'),
           perfProbeWorker: resolve(__dirname, 'src/main/perfProbeWorker.ts'),
-          resistTableWorker: resolve(__dirname, 'src/main/resistTableWorker.ts')
+          resistTableWorker: resolve(__dirname, 'src/main/resistTableWorker.ts'),
+          printWindowWorker: resolve(__dirname, 'src/main/printWindowWorker.ts')
         }
       }
     }
