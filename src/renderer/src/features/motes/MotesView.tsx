@@ -140,8 +140,13 @@ export default function MotesView(): JSX.Element {
                 data-testid="motes-auto-rescan"
               />
             }
-            label="Auto rescan every 45 s"
+            label="Auto rescan"
           />
+          {auto.countdown && (
+            <Typography variant="body2" color="text.secondary" data-testid="motes-auto-rescan-countdown">
+              {auto.countdown}
+            </Typography>
+          )}
           {auto.note && <Typography variant="body2" color="success.main">{auto.note}</Typography>}
         </Stack>
         {scan && <ScanPreview result={scan} onClose={() => setScan(null)} />}

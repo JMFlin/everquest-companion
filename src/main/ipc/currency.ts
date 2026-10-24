@@ -189,11 +189,12 @@ const AUTO_RESCAN_MS = 45_000
 
 let autoTimer: NodeJS.Timeout | null = null
 let autoUpdatedAt: number | null = null
+let autoNextAt: number | null = null
 /** The background rescan in flight; a Scan press waits for it instead of sharing the workers. */
 let background: Promise<void> | null = null
 
 function autoRescanState(): AutoRescanState {
-  return { enabled: settingsStore.get('autoRescan') ?? false, updatedAt: autoUpdatedAt }
+  return { enabled: settingsStore.get('autoRescan') ?? false, updatedAt: autoUpdatedAt, nextAt: autoNextAt }
 }
 
 function pushAutoRescan(): void {
@@ -205,9 +206,12 @@ function pushAutoRescan(): void {
 function scheduleAutoRescan(): void {
   if (autoTimer) clearInterval(autoTimer)
   autoTimer = autoRescanState().enabled ? setInterval(autoRescan, AUTO_RESCAN_MS) : null
+  autoNextAt = autoTimer ? Date.now() + AUTO_RESCAN_MS : null
 }
 
 function autoRescan(): void {
+  autoNextAt = Date.now() + AUTO_RESCAN_MS
+  pushAutoRescan()
   if (background || waiting.size > 0) return
   background = scan(true)
     .then((r) => {
@@ -227,7 +231,9 @@ export function registerCurrencyIpc(): void {
   ipcMain.handle(IPC.setAutoRescan, (_e, enabled: boolean) => {
     settingsStore.set('autoRescan', enabled)
     scheduleAutoRescan()
-    pushAutoRescan()
+    // Ticking the box rescans at once; the countdown runs from there.
+    if (enabled) autoRescan()
+    else pushAutoRescan()
     return autoRescanState()
   })
   // A surface that offers Scan asks for this when it opens: the workers load while the user lines

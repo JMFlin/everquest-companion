@@ -10,8 +10,12 @@ export type CurrencyScanResult =
 
 export type CurrencyScanError = 'eq-window-not-found' | 'eq-minimized' | 'not-currency-window' | 'cancelled'
 
-/** Background rescans: on/off, and when one last saved counts (epoch ms; null = not this session). */
+/**
+ * Background rescans: on/off, when one last saved counts (null = not this session), and when the
+ * next one starts (null while off). Times are epoch ms.
+ */
 export interface AutoRescanState {
   enabled: boolean
   updatedAt: number | null
+  nextAt: number | null
 }

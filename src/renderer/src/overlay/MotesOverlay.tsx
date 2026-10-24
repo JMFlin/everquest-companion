@@ -181,7 +181,8 @@ export default function MotesOverlay(): JSX.Element {
             onChange={(e) => auto.setEnabled(e.target.checked)}
             data-testid="motes-overlay-auto-rescan"
           />
-          Auto rescan every 45 s
+          Auto rescan
+          {auto.countdown && <span style={{ color: DIM }}>· {auto.countdown}</span>}
           {auto.note && <span style={{ color: '#8fd18f' }}>· {auto.note}</span>}
         </label>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: 12, margin: '6px 0' }}>
