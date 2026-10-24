@@ -27,6 +27,10 @@ export const IPC = {
   // renderer -> main: state (count) or take back (null) ONE item's held count by hand — the
   // correction for an item the log and the dump cannot see the truth about (JOS-186).
   setItemOverride: 'progress:setItemOverride',
+  // renderer -> main: capture the EverQuest window and OCR its currency list (CurrencyScanResult).
+  scanCurrency: 'currency:scan',
+  // renderer -> main: confirm a scan — every vocabulary item becomes a hand statement.
+  applyCurrencyScan: 'currency:applyScan',
   // main -> renderer: progress changed (quest completion / inventory), so every
   // view that shows progress stays consistent without re-fetching on a timer.
   onProgress: 'progress:changed',

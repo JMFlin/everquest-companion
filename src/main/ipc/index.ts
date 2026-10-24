@@ -20,6 +20,7 @@ import { registerResistIpc } from './resist'
 import { registerRespawnIpc } from './respawn'
 import { registerCharacterIpc } from './character'
 import { registerCharacterSheetIpc } from './characterSheet'
+import { registerCurrencyIpc } from './currency'
 import { registerClipboardIpc } from './clipboard'
 import { registerComboIpc } from './combo'
 import { registerDevIpc } from './dev'
@@ -74,6 +75,7 @@ import { registerEngineLaunchIpc } from './engine'
 
 export function registerIpc(): void {
   registerCharacterIpc()
+  registerCurrencyIpc()
   // UNGATED SINCE JOS-327. This line read `if (UNRELEASED) …` from JOS-45 until the owner released
   // the Character tab as the gear area's last face; the channel is an ordinary one now. The flag
   // itself survives, tenantless, for whatever surface lands on main before its review next

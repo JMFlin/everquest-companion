@@ -114,6 +114,7 @@ import { engineBridge } from './engine'
 // What's new (JOS-73): the one store key behind the release-notes panel and its teaser strip.
 // The NOTES are committed source the renderer imports directly — see ./releaseNotes.ts.
 import { releaseNotesBridge } from './releaseNotes'
+import { currencyBridge } from './currency'
 // The DEV-ONLY triage surface (see the banner above its methods, below). Types only — the
 // contract lives in src/shared so main, preload and the renderer name one definition.
 import type {
@@ -317,6 +318,7 @@ const api = {
   ...engineBridge,
   // …and the two what's-new methods (./releaseNotes.ts), for the same file-size reason.
   ...releaseNotesBridge,
+  ...currencyBridge,
 
   /**
    * Is this the headless integration-test channel (`EQ_E2E=1`, src/main/e2e.ts)?
@@ -373,13 +375,6 @@ const api = {
    */
   setQuestTurnIns: (questKey: string, instants: number[]): Promise<ProgressState> =>
     ipcRenderer.invoke(IPC.setQuestTurnIns, questKey, instants),
-  /**
-   * State ONE item's held count by hand, or take the statement back with `count: null` (JOS-186).
-   * `key` is the normalized counting key; `name` is only ever a spelling. Main dates the statement
-   * and sanitizes it (shared/itemOverrides.ts owns both rules).
-   */
-  setItemOverride: (key: string, name: string, count: number | null): Promise<ProgressState> =>
-    ipcRenderer.invoke(IPC.setItemOverride, key, name, count),
   getCombatSnapshot: (opts: SnapshotOpts): Promise<CombatSnapshot> =>
     ipcRenderer.invoke(IPC.getCombatSnapshot, opts),
   /** Fuzzy-search the whole fight history + the live fight by name/zone (Task #61). An

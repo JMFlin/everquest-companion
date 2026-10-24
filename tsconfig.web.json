@@ -48,6 +48,8 @@
     "src/preload/sounds.ts",
     // …and `releaseNotes.ts` (the one what's-new store key, JOS-73), likewise.
     "src/preload/releaseNotes.ts",
+    // …and `currency.ts` (the currency-window scan pair, both bridges).
+    "src/preload/currency.ts",
     // …and `uiScale.ts` (the main window's text size, JOS-123), likewise.
     "src/preload/uiScale.ts",
     // …and `buffTrust.ts` (the buff externals allowlist, JOS-140), likewise.
