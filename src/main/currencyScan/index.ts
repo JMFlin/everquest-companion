@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createWorker, OEM, PSM, type Line, type Word, type Worker } from 'tesseract.js'
 import { decodePng, encodePng, type Rgba } from './png'
-import { binarizeForOcr, flattenRows, crop, type Rect } from './raster'
+import { binarizeForOcr, flattenRows, crop, upscale, type Rect } from './raster'
 import { currencyVocabulary, matchCurrencyName } from './vocabulary'
 import { locateFingerprint } from './locate'
 
@@ -44,8 +44,13 @@ type Workers = readonly Worker[]
 const DIGIT_VOTES: readonly { scale: number; threshold: number; flatten: boolean }[] = [
   { scale: 3, threshold: 105, flatten: false },
   { scale: 4, threshold: 55, flatten: true },
-  { scale: 3, threshold: 70, flatten: true }
+  { scale: 3, threshold: 70, flatten: true },
+  { scale: 5, threshold: 90, flatten: false },
+  { scale: 4, threshold: 80, flatten: true }
 ]
+
+/** Ink above this (after row flattening) is part of a glyph when counting digits. */
+const GLYPH_INK = 60
 
 interface Box {
   readonly x0: number
@@ -93,44 +98,76 @@ export async function createCurrencyReader(langDir: string): Promise<CurrencyRea
 async function read(workers: Workers, img: Rgba, fingerprint?: Fingerprint): Promise<CurrencyScan> {
   const at = fingerprint && locateFingerprint(img, fingerprint.strip)
   if (fingerprint && at) {
-    const r = await readRows(workers, img, moved(fingerprint.header, at.x, at.y))
-    if (Object.keys(r.counts).length > 0) return r
+    const header = moved(fingerprint.header, at.x, at.y)
+    const r = await readWindow(workers, img, header)
+    if (Object.keys(r.counts).length > 0) return { ...r, fingerprint: fingerprintOf(img, header) }
   }
   await workers[0].setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, tessedit_char_whitelist: '' })
   const header = findHeader((await workers[0].recognize(encodePng(img))).data.words)
   if (header === null) return { error: 'not-currency-window' }
-  const r = await readRows(workers, img, header)
+  const r = await readWindow(workers, img, header)
   // A window that lists nothing readable is not evidence of anything; never offer it as a result.
-  return Object.keys(r.counts).length === 0 ? { error: 'not-currency-window' } : r
+  return Object.keys(r.counts).length === 0 ? { error: 'not-currency-window' } : { ...r, fingerprint: fingerprintOf(img, header) }
 }
 
-function moved(h: Header, dx: number, dy: number): Header {
-  const box = (b: Box): Box => ({ x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy })
-  return { name: box(h.name), expansion: box(h.expansion), quantity: box(h.quantity) }
-}
+/** OCR misreads small UI text ("Izah" as "z3h", "11" as "1"); below this the window is enlarged. */
+const MIN_TEXT_HEIGHT = 14
 
-async function readRows(
+/**
+ * The rows under `header`. A small UI (low text height) is read from the window alone, enlarged
+ * so its text is MIN_TEXT_HEIGHT tall; the fingerprint is always cut from the capture as drawn.
+ */
+async function readWindow(
   workers: Workers,
   img: Rgba,
   header: Header
-): Promise<{ counts: Record<string, number>; unmatched: string[]; fingerprint: Fingerprint }> {
+): Promise<{ counts: Record<string, number>; unmatched: string[] }> {
   const textHeight = header.name.y1 - header.name.y0
-  const names = await readNames(workers, img, header)
+  const names = textHeight >= MIN_TEXT_HEIGHT ? await readNames(workers, img, header) : await readNamesEnlarged(workers, img, header)
+  // Quantities are read from the capture as drawn: DIGIT_VOTES upscale each cell themselves.
   const qtyX = (header.expansion.x1 + header.quantity.x0) / 2
   const qtyWidth = header.quantity.x1 + textHeight - qtyX
   const cells = names.map((n) =>
     crop(img, { x: qtyX, y: n.yMid - 0.75 * textHeight, width: qtyWidth, height: 1.5 * textHeight })
   )
   const qtys = await readQuantities(workers, cells)
-  const rows: Row[] = names.map((n, i) => ({ name: n.text, qty: qtys[i] }))
+  return resolveRows(names.map((n, i) => ({ name: n.text, qty: qtys[i] })))
+}
 
+/** A small UI's names, read from the window alone enlarged to MIN_TEXT_HEIGHT; rows in capture y. */
+async function readNamesEnlarged(workers: Workers, img: Rgba, header: Header): Promise<TextLine[]> {
+  const textHeight = header.name.y1 - header.name.y0
+  const k = MIN_TEXT_HEIGHT / textHeight
+  const win: Rect = {
+    x: Math.max(0, header.name.x0 - 4 * textHeight),
+    y: Math.max(0, header.name.y0 - textHeight),
+    width: header.quantity.x1 - header.name.x0 + 8 * textHeight,
+    height: 70 * textHeight
+  }
+  const local = moved(header, -win.x, -win.y)
+  const box = (b: Box): Box => ({ x0: b.x0 * k, y0: b.y0 * k, x1: b.x1 * k, y1: b.y1 * k })
+  const names = await readNames(workers, upscale(crop(img, win), k), {
+    name: box(local.name),
+    expansion: box(local.expansion),
+    quantity: box(local.quantity)
+  })
+  return names.map((n) => ({ text: n.text, yMid: n.yMid / k + win.y }))
+}
+
+function fingerprintOf(img: Rgba, header: Header): Fingerprint {
+  const textHeight = header.name.y1 - header.name.y0
   const strip: Rect = {
     x: header.name.x0 - 4,
     y: header.name.y0 - 3,
     width: header.quantity.x1 - header.name.x0 + 8,
     height: textHeight + 6
   }
-  return { ...resolveRows(rows), fingerprint: { strip: crop(img, strip), header: moved(header, -strip.x, -strip.y) } }
+  return { strip: crop(img, strip), header: moved(header, -strip.x, -strip.y) }
+}
+
+function moved(h: Header, dx: number, dy: number): Header {
+  const box = (b: Box): Box => ({ x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy })
+  return { name: box(h.name), expansion: box(h.expansion), quantity: box(h.quantity) }
 }
 
 /**
@@ -169,15 +206,37 @@ async function readQuantities(workers: Workers, cells: readonly Rgba[]): Promise
   return out
 }
 
+/**
+ * Reads whose digit count differs from the cell's glyph count are discarded (OCR drops a "1" of
+ * "11"; the glyphs are separate blobs, so their number is known). Two surviving reads agreeing
+ * settle the cell; otherwise the next setting is tried.
+ */
 async function readCell(worker: Worker, cell: Rgba): Promise<string | null> {
+  const digits = glyphCount(cell)
   const reads: string[] = []
   for (const v of DIGIT_VOTES) {
     const img = binarizeForOcr(v.flatten ? flattenRows(cell) : cell, v.scale, v.threshold)
-    reads.push((await recognizeCrop(worker, img)).map((l) => l.text.trim()).join(''))
-    // Two settings already agreeing settles the cell; the third only matters on a split.
-    if (reads.length === 2 && reads[0] !== '' && reads[0] === reads[1]) break
+    const read = (await recognizeCrop(worker, img)).map((l) => l.text.trim()).join('')
+    if (read.length === digits) reads.push(read)
+    if (reads.length >= 2 && agreed(reads) !== null) break
   }
   return agreed(reads)
+}
+
+/** Separate ink blobs left to right in the cell's middle band: one per drawn digit. */
+function glyphCount(cell: Rgba): number {
+  const flat = flattenRows(cell)
+  const band0 = Math.floor(cell.height / 4)
+  const band1 = Math.ceil((cell.height * 3) / 4)
+  let count = 0
+  let inGlyph = false
+  for (let x = 0; x < flat.width; x++) {
+    let ink = false
+    for (let y = band0; y < band1 && !ink; y++) ink = flat.data[(y * flat.width + x) * 4] > GLYPH_INK
+    if (ink && !inGlyph) count++
+    inGlyph = ink
+  }
+  return count
 }
 
 async function recognizeCrop(worker: Worker, img: Rgba): Promise<Line[]> {

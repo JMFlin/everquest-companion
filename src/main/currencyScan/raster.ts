@@ -81,3 +81,29 @@ export function flattenRows(img: Rgba): Rgba {
   }
   return { width: img.width, height: img.height, data }
 }
+
+/** `img` scaled up `k`x (bilinear), colour kept. */
+export function upscale(img: Rgba, k: number): Rgba {
+  const width = Math.round(img.width * k)
+  const height = Math.round(img.height * k)
+  const data = new Uint8Array(width * height * 4)
+  for (let y = 0; y < height; y++) {
+    const sy = Math.min(img.height - 1, Math.max(0, (y + 0.5) / k - 0.5))
+    const y0 = Math.floor(sy)
+    const y1 = Math.min(img.height - 1, y0 + 1)
+    const fy = sy - y0
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(img.width - 1, Math.max(0, (x + 0.5) / k - 0.5))
+      const x0 = Math.floor(sx)
+      const x1 = Math.min(img.width - 1, x0 + 1)
+      const fx = sx - x0
+      for (let c = 0; c < 4; c++) {
+        const at = (yy: number, xx: number): number => img.data[(yy * img.width + xx) * 4 + c]
+        const top = at(y0, x0) * (1 - fx) + at(y0, x1) * fx
+        const bottom = at(y1, x0) * (1 - fx) + at(y1, x1) * fx
+        data[(y * width + x) * 4 + c] = Math.round(top * (1 - fy) + bottom * fy)
+      }
+    }
+  }
+  return { width, height, data }
+}

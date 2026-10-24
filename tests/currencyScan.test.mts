@@ -79,6 +79,13 @@ test('reads a live capture with a selected (highlighted) row', async () => {
   assertReads(await reader.read(live), expected)
 })
 
+// PrintWindow capture of the game behind other windows (owner, 2026-10-24): a smaller UI (9 px
+// header text) with "Ozah Wind Runes" selected. Small text misread "Izah" and dropped a "1" of "11".
+test('reads a background PrintWindow capture of a small UI', async () => {
+  const pw = readFileSync(join(import.meta.dirname, 'fixtures', 'currency-printwindow.png'))
+  assertReads(await reader.read(pw), { ...EXPECTED, 'Mote of Greater Potential': 13 })
+})
+
 test('finds the window at an offset inside a larger capture', async () => {
   const win = decodePng(FIXTURE)
   const canvas = blackCanvas(win.width + 400, win.height + 300)
