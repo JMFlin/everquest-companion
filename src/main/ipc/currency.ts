@@ -93,7 +93,8 @@ async function scan(): Promise<CurrencyScanResult> {
 
 async function scanOnce(cancelled: () => boolean): Promise<CurrencyScanResult> {
   const ocr = useReader()
-  const images = await captureEqImages()
+  const { images, minimized } = await captureEqImages()
+  if (minimized) return { ok: false, error: 'eq-minimized' }
   if (images.length === 0) return { ok: false, error: 'eq-window-not-found' }
   // The last scan's captures stay on disk (overwritten each scan) so a misread can be inspected.
   const dir = scanDir()

@@ -7,4 +7,4 @@ export type CurrencyScanResult =
   | { ok: true; counts: Record<string, number>; unmatched: string[]; zeroed: string[] }
   | { ok: false; error: CurrencyScanError }
 
-export type CurrencyScanError = 'eq-window-not-found' | 'not-currency-window' | 'cancelled'
+export type CurrencyScanError = 'eq-window-not-found' | 'eq-minimized' | 'not-currency-window' | 'cancelled'

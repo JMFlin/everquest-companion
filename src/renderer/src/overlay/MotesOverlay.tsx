@@ -44,6 +44,8 @@ export default function MotesOverlay(): JSX.Element {
             ? 'No EverQuest window found.'
             : r.error === 'cancelled'
               ? 'Scan stopped.'
+              : r.error === 'eq-minimized'
+                ? 'EverQuest is minimized. Restore it (it can stay behind other windows).'
               : 'Currency list not found in the game window.'
       )
     } finally {

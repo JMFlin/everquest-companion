@@ -5,7 +5,7 @@ import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { createCurrencyReader, type CurrencyReader } from '../src/main/currencyScan/index'
+import { createCurrencyReader, findHeader, type CurrencyReader } from '../src/main/currencyScan/index'
 import { decodePng, encodePng } from '../src/main/currencyScan/png'
 import { locateFingerprint } from '../src/main/currencyScan/locate'
 import { crop } from '../src/main/currencyScan/raster'
@@ -124,4 +124,12 @@ test('column-divider and period junk around a live-capture name still matches', 
   const vocab = currencyVocabulary()
   assert.equal(matchCurrencyName('® Beza Wind Runes. |', vocab), 'Wind Rune Beza')
   assert.equal(matchCurrencyName('@ Jaka Wind Runes |', vocab), 'Wind Rune Jaka')
+})
+
+test('the header words in running text are not a header (they once matched this app message)', () => {
+  const word = (text: string, x0: number, x1: number) => ({ text, bbox: { x0, y0: 3, x1, y1: 19 } })
+  // Measured off that capture: "(Name / Expansion / Quantity)." with ~17 px between labels.
+  assert.equal(findHeader([word('(Name', 4, 55), word('Expansion', 72, 149), word('Quantity).', 166, 241)]), null)
+  // The real window's columns are far apart.
+  assert.ok(findHeader([word('Name', 57, 95), word('Expansion', 275, 345), word('Quantity', 465, 522)]))
 })

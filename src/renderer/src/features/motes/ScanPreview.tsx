@@ -7,8 +7,9 @@ import type { CurrencyScanError, CurrencyScanResult } from '@shared/currencyScan
 const ERRORS: Record<CurrencyScanError, string> = {
   cancelled: 'Scan stopped.',
   'eq-window-not-found': 'No EverQuest window found. Is the game running?',
+  'eq-minimized': 'EverQuest is minimized. Restore it; it can stay behind other windows.',
   'not-currency-window':
-    'Could not find the currency list (Name / Expansion / Quantity). Open the inventory currency tab and try again.'
+    'Could not find the currency list. Open the inventory currency tab in game and try again.'
 }
 
 export function ScanPreview(props: {

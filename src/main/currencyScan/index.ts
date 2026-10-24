@@ -98,7 +98,10 @@ async function read(workers: Workers, img: Rgba, fingerprint?: Fingerprint): Pro
   }
   await workers[0].setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, tessedit_char_whitelist: '' })
   const header = findHeader((await workers[0].recognize(encodePng(img))).data.words)
-  return header === null ? { error: 'not-currency-window' } : readRows(workers, img, header)
+  if (header === null) return { error: 'not-currency-window' }
+  const r = await readRows(workers, img, header)
+  // A window that lists nothing readable is not evidence of anything; never offer it as a result.
+  return Object.keys(r.counts).length === 0 ? { error: 'not-currency-window' } : r
 }
 
 function moved(h: Header, dx: number, dy: number): Header {
@@ -181,14 +184,21 @@ async function recognizeCrop(worker: Worker, img: Rgba): Promise<Line[]> {
   return (await worker.recognize(encodePng(img))).data.lines
 }
 
-/** `Name`, `Expansion`, `Quantity` left to right at one height. */
-function findHeader(words: readonly Word[]): Header | null {
+/**
+ * `Name`, `Expansion`, `Quantity` left to right at one height, in COLUMNS: each label at least
+ * three text heights clear of the previous one. The same three words in running text (this app's
+ * own "(Name / Expansion / Quantity)" message once matched) are not a header.
+ */
+export function findHeader(words: readonly Pick<Word, 'text' | 'bbox'>[]): Header | null {
   const labelled = (label: string): Box[] =>
     words.filter((w) => w.text.replace(/[^A-Za-z]/g, '').toLowerCase() === label).map((w) => w.bbox)
   for (const name of labelled('name')) {
-    const level = (b: Box): boolean => Math.abs(b.y0 + b.y1 - name.y0 - name.y1) / 2 < name.y1 - name.y0
-    const expansion = labelled('expansion').find((b) => level(b) && b.x0 > name.x1)
-    const quantity = labelled('quantity').find((b) => level(b) && expansion !== undefined && b.x0 > expansion.x1)
+    const h = name.y1 - name.y0
+    const level = (b: Box): boolean => Math.abs(b.y0 + b.y1 - name.y0 - name.y1) / 2 < h
+    const expansion = labelled('expansion').find((b) => level(b) && b.x0 - name.x1 >= 3 * h)
+    const quantity = labelled('quantity').find(
+      (b) => level(b) && expansion !== undefined && b.x0 - expansion.x1 >= 3 * h
+    )
     if (expansion && quantity) return { name, expansion, quantity }
   }
   return null

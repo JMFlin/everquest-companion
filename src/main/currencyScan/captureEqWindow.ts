@@ -19,8 +19,10 @@ function printEqWindow(): Promise<PrintWindowMessage> {
   })
 }
 
-export async function captureEqImages(): Promise<Buffer[]> {
+/** `minimized`: the game window exists but has nothing to draw, so no capture can show it. */
+export async function captureEqImages(): Promise<{ images: Buffer[]; minimized: boolean }> {
   const printed = await printEqWindow()
+  if (!printed.ok && printed.reason === 'minimized') return { images: [], minimized: true }
   // One thumbnail box for all sources: the largest display at native pixels, so nothing scales up.
   let width = 0
   let height = 0
@@ -34,8 +36,9 @@ export async function captureEqImages(): Promise<Buffer[]> {
   })
   const eq = sources.filter((s) => s.id.startsWith('window:') && s.name.startsWith(EQ_WINDOW))
   const screens = sources.filter((s) => s.id.startsWith('screen:'))
-  return [
+  const images = [
     ...(printed.ok ? [Buffer.from(printed.png)] : []),
     ...[...eq, ...screens].filter((s) => !s.thumbnail.isEmpty()).map((s) => s.thumbnail.toPNG())
   ]
+  return { images, minimized: false }
 }
