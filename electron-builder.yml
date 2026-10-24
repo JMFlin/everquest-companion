@@ -19,6 +19,8 @@ files:
   # `asarUnpack: resources/**` below then moves this out of the archive; src/main/bundledImages.ts
   # probes both addresses.
   - resources/wiki-images/**
+  # The OCR language model for the currency-window scan (src/main/currencyScan); never fetched.
+  - resources/ocr/**
   - '!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}'
   # `map` IN THIS LIST IS LOAD-BEARING SINCE JOS-100, and was incidental before it. The build
   # now EMITS sourcemaps (electron.vite.config.ts turns `sourcemap` on for all three bundles, so
