@@ -26,6 +26,10 @@ never which mote went into an upgrade. The currency window can.
   with an exact tier-capped DP. It applies motes in ascending cap order, condenses only to unlock
   a cap, and spends the least spell-equivalent value. The spell then takes what is left,
   largest-first. Spell XP values are powers of two, so greedy filling is exact.
+- **Gear takes spare copies and banked progress.** The gear picker also accepts XP already banked
+  at the current tier (default 0) and spare copies of the same item. A +t copy merges in for 2^t
+  XP (eqlwiki Gear Merge Experience) with no tier cap, so copies are merged after every capped
+  mote. They cost no mote, so they are used first.
 - **Game rules the owner confirmed:**
   - XP past rank or tier 10 is impossible.
   - Two motes of tier n condense into one of tier n+1.

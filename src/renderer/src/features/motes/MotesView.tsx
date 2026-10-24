@@ -25,6 +25,7 @@ import type { MoteName, SectionPlan, Selection } from '@shared/planner/motes'
 import { useProgress } from '../posky/useProgress'
 import type { InventoryRow } from '../inventory/reconcile'
 import { ScanPreview } from './ScanPreview'
+import { GearExtras } from './GearExtras'
 
 const RANKS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -68,18 +69,13 @@ function shortMote(name: MoteName): string {
 function PlanSteps({ plan }: { plan: SectionPlan }): JSX.Element {
   return (
     <Box sx={{ pl: 9 }}>
-      {plan.steps.map((s, i) =>
-        s.kind === 'condense' ? (
-          <Typography key={i} variant="body2">
-            Condense {s.pairs * 2}× {shortMote(s.mote)} → {s.pairs}× {shortMote(s.into)}
-          </Typography>
-        ) : (
-          <Typography key={i} variant="body2">
-            Apply {s.count}× {shortMote(s.mote)} → rank {s.after.full}
-            {s.after.full < 10 ? ` (${s.after.fraction}/${2 ** s.after.full})` : ''}
-          </Typography>
-        )
-      )}
+      {plan.steps.map((s, i) => (
+        <Typography key={i} variant="body2">
+          {s.kind === 'condense'
+            ? `Condense ${s.pairs * 2}× ${shortMote(s.mote)} → ${s.pairs}× ${shortMote(s.into)}`
+            : `${s.kind === 'merge' ? `Merge ${s.count}× spare +${s.tier} copy` : `Apply ${s.count}× ${shortMote(s.mote)}`} → rank ${s.after.full}${s.after.full < 10 ? ` (${s.after.fraction}/${2 ** s.after.full})` : ''}`}
+        </Typography>
+      ))}
       {plan.shortfallXp > 0 ? (
         <Typography variant="body2" color="warning.main">
           Not enough motes: stops at rank {plan.reached.full} ({plan.reached.fraction}/
@@ -98,7 +94,18 @@ function PlanSteps({ plan }: { plan: SectionPlan }): JSX.Element {
 function PlannerPanel({ held }: { held: Partial<Record<MoteName, number>> }): JSX.Element {
   const [spell, setSpell] = useState<{ sel?: Selection; pending: number | null }>({ pending: null })
   const [gear, setGear] = useState<{ sel?: Selection; pending: number | null }>({ pending: null })
-  const plan = useMemo(() => planMotes(held, { spell: spell.sel, gear: gear.sel }), [held, spell, gear])
+  // Banked XP belongs to the tier it was entered for; picking a new current tier resets it to 0.
+  const [fraction, setFraction] = useState(0)
+  const [spares, setSpares] = useState<number[]>([])
+  const pickGear = (n: number): void => {
+    const next = nextSelection(gear.sel, gear.pending, n)
+    if ((next.sel?.from ?? next.pending) !== (gear.sel?.from ?? gear.pending)) setFraction(0)
+    setGear(next)
+  }
+  const plan = useMemo(
+    () => planMotes(held, { spell: spell.sel, gear: gear.sel ? { ...gear.sel, fraction, spares } : undefined }),
+    [held, spell, gear, fraction, spares]
+  )
   return (
     <Paper sx={{ p: 2 }}>
       <Typography variant="h6" sx={{ mb: 1 }}>
@@ -116,8 +123,17 @@ function PlannerPanel({ held }: { held: Partial<Record<MoteName, number>> }): JS
           label="Gear"
           sel={gear.sel}
           pending={gear.pending}
-          onPick={(n) => setGear(nextSelection(gear.sel, gear.pending, n))}
+          onPick={pickGear}
         />
+        {gear.sel && (
+          <GearExtras
+            from={gear.sel.from}
+            fraction={fraction}
+            onFraction={setFraction}
+            spares={spares}
+            onSpares={setSpares}
+          />
+        )}
         {plan.gear && <PlanSteps plan={plan.gear} />}
         {(plan.spell ?? plan.gear) && (
           <Typography variant="body2" color="text.secondary">
