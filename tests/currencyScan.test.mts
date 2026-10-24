@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readCurrencyWindow } from '../src/main/currencyScan/index'
 import { decodePng, encodePng } from '../src/main/currencyScan/png'
+import { currencyVocabulary, matchCurrencyName } from '../src/main/currencyScan/vocabulary'
 import { MOTES } from '../src/shared/planner/motes'
 
 const LANG_DIR = join(import.meta.dirname, '..', 'resources', 'ocr')
@@ -73,4 +74,10 @@ test('an image without the header is not a currencies window', async () => {
 test('png codec round-trips the fixture pixels', () => {
   const img = decodePng(FIXTURE)
   assert.deepEqual(decodePng(encodePng(img)), img)
+})
+
+test('column-divider and period junk around a live-capture name still matches', () => {
+  const vocab = currencyVocabulary()
+  assert.equal(matchCurrencyName('® Beza Wind Runes. |', vocab), 'Wind Rune Beza')
+  assert.equal(matchCurrencyName('@ Jaka Wind Runes |', vocab), 'Wind Rune Jaka')
 })

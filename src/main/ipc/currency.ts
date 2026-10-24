@@ -3,9 +3,11 @@
 // so loot after it still counts forward (shared/itemOverrides.ts).
 
 import { app, ipcMain } from 'electron'
+import { mkdirSync, writeFileSync } from 'fs'
+import { join } from 'path'
 import { IPC } from '../../shared/ipc'
 import type { CurrencyScanResult } from '../../shared/currencyScan'
-import { captureEqWindow } from '../currencyScan/captureEqWindow'
+import { captureEqImages } from '../currencyScan/captureEqWindow'
 import { findOcrLangDir, readCurrencyWindow } from '../currencyScan'
 import { currencyVocabulary } from '../currencyScan/vocabulary'
 import { activeCharId } from '../session'
@@ -13,12 +15,19 @@ import { setItemOverride } from '../storeItemOverrides'
 import { sendToMain } from '../windows'
 
 async function scan(): Promise<CurrencyScanResult> {
-  const png = await captureEqWindow()
-  if (!png) return { ok: false, error: 'eq-window-not-found' }
+  const images = await captureEqImages()
+  if (images.length === 0) return { ok: false, error: 'eq-window-not-found' }
+  // The last scan's captures stay on disk (overwritten each scan) so a misread can be inspected.
+  const dir = join(app.getPath('userData'), 'currency-scan')
+  mkdirSync(dir, { recursive: true })
+  images.forEach((png, i) => writeFileSync(join(dir, `capture-${i}.png`), png))
   const langDir = findOcrLangDir(app.getAppPath(), process.resourcesPath, process.cwd())
   if (!langDir) throw new Error('OCR language data (resources/ocr/eng.traineddata) is missing')
-  const r = await readCurrencyWindow(png, langDir)
-  return 'error' in r ? { ok: false, error: r.error } : { ok: true, ...r }
+  for (const png of images) {
+    const r = await readCurrencyWindow(png, langDir)
+    if (!('error' in r)) return { ok: true, ...r }
+  }
+  return { ok: false, error: 'not-currency-window' }
 }
 
 export function registerCurrencyIpc(): void {

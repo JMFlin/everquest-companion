@@ -21,10 +21,15 @@ export function currencyVocabulary(): readonly string[] {
 
 /**
  * The window spells stacks in the plural and runes suffix-first ("Azia Wind Runes");
- * rewrite to the item name ("Wind Rune Azia"). Leading icon junk is stripped.
+ * rewrite to the item name ("Wind Rune Azia"). Leading icon junk and trailing column-divider
+ * junk ("Beza Wind Runes. |") are stripped.
  */
 export function normalizeRowText(text: string): string {
-  const t = text.replace(/^[^A-Za-z]+/, '').replace(/\s+/g, ' ').trim()
+  const t = text
+    .replace(/^[^A-Za-z]+/, '')
+    .replace(/[^A-Za-z]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
   const rune = /^(\S+) Wind Runes?$/i.exec(t)
   if (rune) return `Wind Rune ${rune[1]}`
   return t.replace(/^\S*otes of /i, 'Mote of ')
