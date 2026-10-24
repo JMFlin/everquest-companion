@@ -12,6 +12,7 @@ import { decodePng, encodePng, type Rgba } from './png'
 import { binarizeForOcr, flattenRows, crop, resize, upscale, type Rect } from './raster'
 import { currencyVocabulary, matchCurrencyName } from './vocabulary'
 import { locateIn, MATCH, prepare } from './locate'
+import { learnDigits, readByGlyphs } from './glyphs'
 
 /**
  * The header strip as an earlier capture drew it, plus the three header labels' boxes relative to
@@ -252,7 +253,10 @@ async function readQuantities(
       for (let i = next++; i < cells.length; i = next++) out[i] = await readCell(w, cells[i], k)
     })
   )
-  return out
+  // Cells OCR could not settle are read by the digits the settled ones show (glyphs.ts).
+  if (out.every((q) => q !== null)) return out
+  const templates = learnDigits(cells.flatMap((cell, i) => (out[i] === null ? [] : [{ cell, text: out[i] }])))
+  return out.map((q, i) => q ?? readByGlyphs(cells[i], templates))
 }
 
 /**

@@ -86,6 +86,17 @@ test('reads a background PrintWindow capture of a small UI', async () => {
   assertReads(await reader.read(pw), { ...EXPECTED, 'Mote of Greater Potential': 13 })
 })
 
+// Chromium window capture at 11 px text (owner, 2026-10-24) with "Ozah Wind Runes" selected: OCR
+// read its 6 as 6 and as 5, so the glyph fallback (glyphs.ts) settles it from the capture's own 6s.
+test('settles a split digit on the selected row from the digits of the same capture', async () => {
+  const png = readFileSync(join(import.meta.dirname, 'fixtures', 'currency-chromium-11px.png'))
+  assertReads(await reader.read(png), {
+    ...EXPECTED,
+    'Mote of Greater Potential': 13,
+    'Mote of Infinitesimal Potential': 23
+  })
+})
+
 test('finds the window at an offset inside a larger capture', async () => {
   const win = decodePng(FIXTURE)
   const canvas = blackCanvas(win.width + 400, win.height + 300)
