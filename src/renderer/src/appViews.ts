@@ -23,6 +23,8 @@ export type View =
   // you have decided you want, kept as a list rather than derived from a plan. It ships this
   // ticket as an honest placeholder panel and gains its content in JOS-326.
   | 'wishlist'
+  // Held motes + Wind Runes (currency-window scan) and the mote upgrade planner.
+  | 'motes'
   | 'buffs'
   | 'timers'
   | 'preferences'
@@ -88,6 +90,7 @@ export const VIEW_LABELS: Record<View, string> = {
   // JOS-324. Two words, as a player writes it — the tab bar says it and, the day a wish-list row
   // deep-links into Loot, so will that drill's Back button.
   wishlist: 'Wish list',
+  motes: 'Motes',
   buffs: 'Buffs',
   timers: 'Timers',
   preferences: 'Preferences',
@@ -114,6 +117,7 @@ const KNOWN_VIEWS: View[] = [
   'planner',
   'gear',
   'wishlist',
+  'motes',
   'buffs',
   'timers',
   'preferences',

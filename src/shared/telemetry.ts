@@ -114,6 +114,9 @@ export const TELEMETRY_VIEWS = [
   // JOS-326 fills it, and how often anyone opens a placeholder is exactly the sort of thing the
   // dwell histogram is for.
   'wishlist',
+  // Fork-only Motes tab: the upstream ingest Lambda does not know it, so a batch carrying it is
+  // refused there. Accepted for a local build; opt out of usage analytics to avoid the drop.
+  'motes',
   // The gear area's Character tab (JOS-45, released JOS-327). SAME CLOSED-ENUM DEPLOY ORDER as every
   // member added since JOS-119 — the ingest Lambda validates through this module, so the server has
   // to learn the value before a client that can emit it ships, or one dwell on this tab 400s the
