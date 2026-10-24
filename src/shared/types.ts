@@ -159,6 +159,9 @@ export interface OverlayConfig {
    * I did not drill from".
    */
   drill?: OverlayDrill | null
+  /** Rolled up to the title bar (main/overlayCollapse.ts), and the height to roll back down to. */
+  collapsed?: boolean
+  expandedHeight?: number
   /**
    * The 'toast' kind's own knobs (sound / volume / duration — shared/toast.ts). Present only
    * on that kind; every other kind ignores it. Optional so a store written before the toast

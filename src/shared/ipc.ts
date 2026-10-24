@@ -29,6 +29,8 @@ export const IPC = {
   setItemOverride: 'progress:setItemOverride',
   // renderer -> main: capture the EverQuest window and OCR its currency list (CurrencyScanResult).
   scanCurrency: 'currency:scan',
+  // overlay -> main: roll this overlay up to its title bar, or back down.
+  overlaySetCollapsed: 'overlay:setCollapsed',
   // renderer -> main: stop the scan in progress (it answers `cancelled`).
   cancelCurrencyScan: 'currency:cancel',
   // renderer -> main: a Scan button is on screen — start the OCR workers now.

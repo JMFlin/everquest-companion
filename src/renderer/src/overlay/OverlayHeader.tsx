@@ -7,6 +7,7 @@ import {
 } from './OverlaySelect'
 import { IconButton, ICON_ACCENT_GOLD } from './IconButton'
 import type { CaptureReason, OverlayChrome } from './useOverlayChrome'
+import { useOverlayCollapse } from './useOverlayCollapse'
 
 /**
  * OverlayHeader — the ONE header row every overlay kind renders, and (in interactive mode) the
@@ -149,6 +150,7 @@ function HeaderControls({
   action?: OverlayHeaderAction
 }): JSX.Element | null {
   const { locked, hovering, noDrag, toggleLock } = chrome
+  const collapse = useOverlayCollapse()
   if (locked && !hovering) {
     return <div aria-hidden style={{ width: CONTROL_PX, height: CONTROL_PX, marginLeft: 2, flexShrink: 0 }} />
   }
@@ -171,6 +173,17 @@ function HeaderControls({
       {!locked && action && (
         <IconButton label={action.label} onClick={action.onClick} accentBg={iconAccentBg}>
           {action.glyph}
+        </IconButton>
+      )}
+      {/* Unlocked only, like ✕: roll up to this title bar (a real minimize would vanish with no
+          taskbar button to restore from — main/overlayCollapse.ts). */}
+      {!locked && (
+        <IconButton
+          label={collapse.collapsed ? 'Expand overlay' : 'Collapse to title bar'}
+          onClick={collapse.toggle}
+          accentBg={iconAccentBg}
+        >
+          {collapse.collapsed ? '▢' : '▁'}
         </IconButton>
       )}
       {!locked && (

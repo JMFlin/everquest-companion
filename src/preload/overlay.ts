@@ -399,6 +399,9 @@ const overlayApi = {
   /** Close this overlay from its own close button (interactive mode only). */
   close: (): void => ipcRenderer.send(IPC.overlayClose, KIND),
 
+  /** Roll this overlay up to its title bar, or back down (main/overlayCollapse.ts). */
+  setCollapsed: (collapsed: boolean): void => ipcRenderer.send(IPC.overlaySetCollapsed, KIND, collapsed),
+
   /** The motes overlay's Scan button. */
   ...scanBridge
 }

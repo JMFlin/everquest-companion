@@ -3,6 +3,7 @@
 // renderer's own error reports.
 
 import { ipcMain } from 'electron'
+import { setOverlayCollapsed } from '../overlayCollapse'
 import { IPC } from '../../shared/ipc'
 import { E2E } from '../e2e'
 import { logError, logInfo } from '../errorLog'
@@ -303,6 +304,13 @@ export function registerWindowIpc(): void {
     setOverlayIgnoreMouse(kind, ignore)
   })
   ipcMain.on(IPC.overlayClose, (_e, kind: OverlayKind) => setOverlayOpen(kind, false))
+  // Collapse to the title bar / expand (overlayCollapse.ts), then echo so the button flips.
+  ipcMain.on(IPC.overlaySetCollapsed, (_e, kind: OverlayKind, collapsed: unknown) => {
+    const w = getOverlayWindow(kind)
+    if (!w || typeof collapsed !== 'boolean') return
+    setOverlayCollapsed(kind, w, collapsed)
+    w.webContents.send(IPC.onOverlayConfig, { kind, config: getOverlayConfig(kind) })
+  })
   // "What I drew is this tall" (JOS-386). ONLY the height moves, only for a kind whose height is
   // its content's, and never into the store as a chosen size — all three of those rules live in
   // `fitOverlayHeight` (overlayBounds.ts) beside the window it has to move. The height is

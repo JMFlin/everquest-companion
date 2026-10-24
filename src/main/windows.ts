@@ -28,6 +28,7 @@ import { installBackButton } from './appBack'
 import { E2E } from './e2e'
 import { logError, logInfo } from './errorLog'
 import { OVERLAY_MIN_SIZE, OVERLAY_TITLE, isStripKind, overlayDefaultSize } from './overlayLayout'
+import { restoreOverlayCollapsed } from './overlayCollapse'
 // WHERE AN OVERLAY IS, HOW TALL IT IS, AND WHICH OF THAT IS WRITTEN DOWN (JOS-187 + JOS-386). Its
 // own module for the reason overlaySnapDrag.ts and OVERLAY_TITLE are: this file is at the
 // 400-code-line ceiling, and a persistence policy over pure geometry was never its subject.
@@ -884,6 +885,7 @@ export function createOverlayWindow(kind: OverlayKind): void {
   // Hand the window to ./overlayBounds.ts, which persists where the USER leaves it (never one of
   // our own placements — JOS-187) and keeps a fit kind's height following its content (JOS-386).
   installOverlayBounds(kind, w)
+  restoreOverlayCollapsed(kind, w)
 
   // A drag that lines this window up with its neighbours and the screen edges — but ONLY for a
   // user who has turned it on in Preferences (JOS-217). Installed for every overlay so the
