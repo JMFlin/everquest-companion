@@ -8,17 +8,23 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createWorker, OEM, PSM, type Line, type Word, type Worker } from 'tesseract.js'
 import { decodePng, encodePng, type Rgba } from './png'
-import { binarizeForOcr, crop, type Rect } from './raster'
+import { binarizeForOcr, flattenRows, crop, type Rect } from './raster'
 import { currencyVocabulary, matchCurrencyName } from './vocabulary'
 
 export type CurrencyScan =
   | { counts: Record<string, number>; unmatched: string[] }
   | { error: 'not-currency-window' }
 
-/** Digits are upscaled and binarized before OCR; at 1x "11" reads as "1". Measured on the
- *  fixture: scale 2-4 x threshold 90-120 all read 24/24 except the corners; this is the middle. */
-const DIGIT_SCALE = 3
-const DIGIT_THRESHOLD = 105
+/**
+ * Each quantity cell is read alone (PSM single line, digits only) under several upscale/threshold
+ * settings; the number every non-empty read agrees on wins, any disagreement leaves it unmatched. One setting cannot read both
+ * plain rows and the selected row's light band: tiny "11"s collapse to "1" at the edges.
+ */
+const DIGIT_VOTES: readonly { scale: number; threshold: number; flatten: boolean }[] = [
+  { scale: 3, threshold: 105, flatten: false },
+  { scale: 4, threshold: 55, flatten: true },
+  { scale: 3, threshold: 70, flatten: true }
+]
 
 interface Box {
   readonly x0: number
@@ -78,13 +84,27 @@ async function scan(worker: Worker, img: Rgba): Promise<CurrencyScan> {
   const qtyRect: Rect = { x: qtyX, y: top, width: header.quantity.x1 + textHeight - qtyX, height: img.height - top }
 
   await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK, tessedit_char_whitelist: '' })
-  const names = rowBlock(textLines(await recognizeCrop(worker, crop(img, nameRect)), nameRect, 1), textHeight)
+  // Plain and row-flattened name passes: each misses rows the other reads (the selected row's
+  // band; the last row of a short window). Per row height, the first line naming an item wins.
+  const raw = textLines(await recognizeCrop(worker, crop(img, nameRect)), nameRect, 1)
+  const flat = textLines(await recognizeCrop(worker, flattenRows(crop(img, nameRect))), nameRect, 1)
+  const names = rowBlock(mergeRows([...raw, ...flat], textHeight), textHeight)
 
-  await worker.setParameters({ tessedit_char_whitelist: '0123456789' })
-  const digitImg = binarizeForOcr(crop(img, qtyRect), DIGIT_SCALE, DIGIT_THRESHOLD)
-  const qtys = textLines(await recognizeCrop(worker, digitImg), qtyRect, DIGIT_SCALE)
-
-  return pairRows(names, qtys, textHeight)
+  await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE, tessedit_char_whitelist: '0123456789' })
+  const rows: Row[] = []
+  for (const name of names) {
+    const cell: Rect = { x: qtyX, y: name.yMid - 0.75 * textHeight, width: qtyRect.width, height: 1.5 * textHeight }
+    const reads: string[] = []
+    for (const v of DIGIT_VOTES) {
+      const src = crop(img, cell)
+      const lines = await recognizeCrop(worker, binarizeForOcr(v.flatten ? flattenRows(src) : src, v.scale, v.threshold))
+      reads.push(lines.map((l) => l.text.trim()).join(''))
+      // Two settings already agreeing settles the row; the rest only matter on a split.
+      if (reads.length === 2 && reads[0] !== '' && reads[0] === reads[1]) break
+    }
+    rows.push({ name: name.text, qty: agreed(reads) })
+  }
+  return resolveRows(rows)
 }
 
 async function recognizeCrop(worker: Worker, img: Rgba): Promise<Line[]> {
@@ -122,22 +142,47 @@ function rowBlock(lines: readonly TextLine[], textHeight: number): TextLine[] {
   return block
 }
 
-/** Names and quantities joined by row y; anything that doesn't resolve is kept verbatim. */
-function pairRows(names: readonly TextLine[], qtys: readonly TextLine[], textHeight: number): CurrencyScan {
+interface Row {
+  readonly name: string
+  readonly qty: string | null
+}
+
+/**
+ * Lines within ~half a row of each other are one row; prefer a line that names an item. A line
+ * naming an item another row already names is the second pass's ghost of it, never a new row.
+ */
+function mergeRows(lines: readonly TextLine[], textHeight: number): TextLine[] {
+  const vocab = currencyVocabulary()
+  const rows: TextLine[] = []
+  for (const line of [...lines].sort((a, b) => a.yMid - b.yMid)) {
+    const name = matchCurrencyName(line.text, vocab)
+    if (name !== null && rows.some((r) => matchCurrencyName(r.text, vocab) === name)) continue
+    const i = rows.findIndex((r) => Math.abs(r.yMid - line.yMid) < textHeight * 0.6)
+    if (i === -1) rows.push(line)
+    else if (matchCurrencyName(rows[i].text, vocab) === null && matchCurrencyName(line.text, vocab) !== null) {
+      rows[i] = line
+    }
+  }
+  return rows
+}
+
+/** The number every non-empty read agrees on; null when none read or two disagree. */
+function agreed(reads: readonly string[]): string | null {
+  const numbers = new Set(reads.filter((r) => r !== ''))
+  const [only] = numbers
+  return numbers.size === 1 && /^\d+$/.test(only) ? only : null
+}
+
+/** Every row lands in `counts` or, verbatim, in `unmatched`. */
+function resolveRows(rows: readonly Row[]): CurrencyScan {
   const vocab = currencyVocabulary()
   const counts: Record<string, number> = {}
   const unmatched: string[] = []
-  const unpaired = new Set(qtys)
-  for (const row of names) {
-    const qtyLine = [...unpaired].find((q) => Math.abs(q.yMid - row.yMid) < textHeight * 0.75)
-    if (qtyLine) unpaired.delete(qtyLine)
-    const qty = qtyLine?.text ?? ''
-    const name = matchCurrencyName(row.text, vocab)
-    if (name !== null && /^\d+$/.test(qty) && !(name in counts)) counts[name] = Number(qty)
-    else unmatched.push(`${row.text} | ${qty}`)
+  for (const row of rows) {
+    const name = matchCurrencyName(row.name, vocab)
+    if (name !== null && row.qty !== null && !(name in counts)) counts[name] = Number(row.qty)
+    else unmatched.push(`${row.name} | ${row.qty ?? '?'}`)
   }
-  const bottom = (names.at(-1)?.yMid ?? 0) + textHeight
-  for (const q of unpaired) if (q.yMid < bottom) unmatched.push(` | ${q.text}`)
   return { counts, unmatched }
 }
 

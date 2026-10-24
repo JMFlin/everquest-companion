@@ -55,6 +55,14 @@ test('reads every row of the currencies window', async () => {
   assert.deepEqual(await readCurrencyWindow(FIXTURE, LANG_DIR), { counts: EXPECTED, unmatched: [] })
 })
 
+// A live in-game capture (owner, 2026-10-24) with "Motes of Major Potential" selected: the
+// selected row sits on a light band that one global threshold cannot read alongside the rest.
+test('reads a live capture with a selected (highlighted) row', async () => {
+  const live = readFileSync(join(import.meta.dirname, 'fixtures', 'currency-live-highlight.png'))
+  const expected = { ...EXPECTED, 'Mote of Greater Potential': 13 }
+  assert.deepEqual(await readCurrencyWindow(live, LANG_DIR), { counts: expected, unmatched: [] })
+})
+
 test('finds the window at an offset inside a larger capture', async () => {
   const win = decodePng(FIXTURE)
   const canvas = blackCanvas(win.width + 400, win.height + 300)

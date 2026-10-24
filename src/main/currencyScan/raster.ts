@@ -58,3 +58,26 @@ export function binarizeForOcr(img: Rgba, scale: number, threshold: number): Rgb
   }
   return { width, height, data }
 }
+
+/**
+ * Each row's median luma subtracted from it, as grey RGBA. A selected row is drawn on a flat
+ * light band; this makes its text the same contrast-over-background as every other row.
+ */
+export function flattenRows(img: Rgba): Rgba {
+  const data = new Uint8Array(img.width * img.height * 4)
+  const row = new Float32Array(img.width)
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const o = (y * img.width + x) * 4
+      const a = img.data[o + 3] / 255
+      row[x] = a * (0.299 * img.data[o] + 0.587 * img.data[o + 1] + 0.114 * img.data[o + 2])
+    }
+    const median = Float32Array.from(row).sort()[img.width >> 1]
+    for (let x = 0; x < img.width; x++) {
+      const o = (y * img.width + x) * 4
+      data[o] = data[o + 1] = data[o + 2] = Math.max(0, Math.round(row[x] - median))
+      data[o + 3] = 255
+    }
+  }
+  return { width: img.width, height: img.height, data }
+}
