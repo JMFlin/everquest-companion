@@ -76,6 +76,25 @@ function Steps({ plan }: { plan: SectionPlan }): JSX.Element {
   )
 }
 
+/** "Progress at +N: [ x ] / 2^N" — XP already banked toward the next rank or tier. */
+function ProgressPlain(props: { from: number; fraction: number; onFraction: (f: number) => void }): JSX.Element {
+  const step = 2 ** props.from
+  return (
+    <div>
+      Progress at +{props.from}:{' '}
+      <input
+        type="number"
+        min={0}
+        max={step - 1}
+        value={props.fraction}
+        onChange={(e) => props.onFraction(Math.min(step - 1, Math.max(0, Math.floor(Number(e.target.value) || 0))))}
+        style={{ width: 48, fontSize: 11 }}
+      />{' '}
+      / {step}
+    </div>
+  )
+}
+
 function GearExtrasPlain(props: {
   from: number
   fraction: number
@@ -83,21 +102,9 @@ function GearExtrasPlain(props: {
   spares: number[]
   onSpares: (s: number[]) => void
 }): JSX.Element {
-  const step = 2 ** props.from
   return (
     <div style={{ paddingLeft: 38 }}>
-      <div>
-        Progress at +{props.from}:{' '}
-        <input
-          type="number"
-          min={0}
-          max={step - 1}
-          value={props.fraction}
-          onChange={(e) => props.onFraction(Math.min(step - 1, Math.max(0, Math.floor(Number(e.target.value) || 0))))}
-          style={{ width: 48, fontSize: 11 }}
-        />{' '}
-        / {step}
-      </div>
+      <ProgressPlain from={props.from} fraction={props.fraction} onFraction={props.onFraction} />
       <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
         <span>Spare copy:</span>
         {SPARE_TIERS.map((t) => (
@@ -194,6 +201,11 @@ export default function MotesOverlay(): JSX.Element {
           ))}
         </div>
         <Picker label="Spell" pick={p.spell} onPick={p.pickSpell} />
+        {p.spell.sel && (
+          <div style={{ paddingLeft: 38 }}>
+            <ProgressPlain from={p.spell.sel.from} fraction={p.spellFraction} onFraction={p.setSpellFraction} />
+          </div>
+        )}
         {p.plan.spell && <Steps plan={p.plan.spell} />}
         <Picker label="Gear" pick={p.gear} onPick={p.pickGear} />
         {p.gear.sel && (

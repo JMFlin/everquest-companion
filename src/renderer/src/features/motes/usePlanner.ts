@@ -23,11 +23,15 @@ function nextPick(pick: RankPick, n: number): RankPick {
 export interface Planner {
   spell: RankPick
   gear: RankPick
+  /** XP already banked at the spell's current rank (0 unless set). */
+  spellFraction: number
+  /** XP already banked at the gear's current tier (0 unless set). */
   fraction: number
   spares: number[]
   plan: MotePlan
   pickSpell: (n: number) => void
   pickGear: (n: number) => void
+  setSpellFraction: (fraction: number) => void
   setFraction: (fraction: number) => void
   setSpares: (spares: number[]) => void
 }
@@ -35,20 +39,31 @@ export interface Planner {
 export function usePlanner(held: Partial<Record<MoteName, number>>): Planner {
   const [spell, setSpell] = useState<RankPick>({ pending: null })
   const [gear, setGear] = useState<RankPick>({ pending: null })
-  // Banked XP belongs to the tier it was entered for; picking a new current tier resets it to 0.
+  // Banked XP belongs to the rank/tier it was entered for; picking a new current one resets it to 0.
+  const [spellFraction, setSpellFraction] = useState(0)
   const [fraction, setFraction] = useState(0)
   const [spares, setSpares] = useState<number[]>([])
   const plan = useMemo(
-    () => planMotes(held, { spell: spell.sel, gear: gear.sel ? { ...gear.sel, fraction, spares } : undefined }),
-    [held, spell, gear, fraction, spares]
+    () =>
+      planMotes(held, {
+        spell: spell.sel ? { ...spell.sel, fraction: spellFraction } : undefined,
+        gear: gear.sel ? { ...gear.sel, fraction, spares } : undefined
+      }),
+    [held, spell, gear, spellFraction, fraction, spares]
   )
   return {
     spell,
     gear,
+    spellFraction,
     fraction,
     spares,
     plan,
-    pickSpell: (n) => setSpell(nextPick(spell, n)),
+    pickSpell: (n) => {
+      const next = nextPick(spell, n)
+      if ((next.sel?.from ?? next.pending) !== (spell.sel?.from ?? spell.pending)) setSpellFraction(0)
+      setSpell(next)
+    },
+    setSpellFraction,
     pickGear: (n) => {
       const next = nextPick(gear, n)
       if ((next.sel?.from ?? next.pending) !== (gear.sel?.from ?? gear.pending)) setFraction(0)

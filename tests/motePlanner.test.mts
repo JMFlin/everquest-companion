@@ -347,3 +347,20 @@ test('spell steps are listed smallest mote first, like gear', () => {
   assert.deepEqual(order, [...order].sort((a, b) => a - b))
   assert.equal(spell.steps[0].kind === 'apply' && spell.steps[0].mote, 'Mote of Infinitesimal Potential')
 })
+
+test('spell banked progress counts: rank 4 at 5/16 needs 11 more XP to reach rank 5', () => {
+  // 11 = Potential (8) + Minor (2) + Infinitesimal (1), exactly.
+  const plan = planMotes(OWNER, { spell: { from: 4, to: 5, fraction: 5 } })
+  const spell = plan.spell as SectionPlan
+  replay(toCounts(OWNER), spell, 'spell', { fraction: 5 })
+  assert.deepEqual(spell.reached, { full: 5, fraction: 0 })
+  assert.equal(spell.overshootXp, 0)
+  assert.deepEqual(
+    spell.steps.map((s) => (s.kind === 'apply' ? [s.mote, s.count] : [])),
+    [
+      ['Mote of Infinitesimal Potential', 1],
+      ['Mote of Minor Potential', 1],
+      ['Mote of Potential', 1]
+    ]
+  )
+})

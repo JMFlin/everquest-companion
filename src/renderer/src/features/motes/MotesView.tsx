@@ -25,7 +25,7 @@ import type { CurrencyScanResult } from '@shared/currencyScan'
 import { MOTES, type MoteName, type SectionPlan } from '@shared/planner/motes'
 import { useProgress } from '../posky/useProgress'
 import { ScanPreview } from './ScanPreview'
-import { GearExtras } from './GearExtras'
+import { GearExtras, ProgressField } from './GearExtras'
 import { heldMotes } from './heldMotes'
 import { useAutoRescan } from './useAutoRescan'
 import { RANKS, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type RankPick } from './usePlanner'
@@ -73,6 +73,16 @@ function PlannerPanel({ held }: { held: Record<MoteName, number> }): JSX.Element
       </Typography>
       <Stack spacing={2}>
         <RankPicker label="Spell" pick={p.spell} onPick={p.pickSpell} />
+        {p.spell.sel && (
+          <Box sx={{ pl: 9 }}>
+            <ProgressField
+              from={p.spell.sel.from}
+              fraction={p.spellFraction}
+              onFraction={p.setSpellFraction}
+              testId="motes-spell-fraction"
+            />
+          </Box>
+        )}
         {p.plan.spell && <PlanSteps plan={p.plan.spell} />}
         <RankPicker label="Gear" pick={p.gear} onPick={p.pickGear} />
         {p.gear.sel && (
