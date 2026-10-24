@@ -29,6 +29,8 @@ export const IPC = {
   setItemOverride: 'progress:setItemOverride',
   // renderer -> main: capture the EverQuest window and OCR its currency list (CurrencyScanResult).
   scanCurrency: 'currency:scan',
+  // renderer -> main: a Scan button is on screen — start the OCR workers now.
+  warmCurrencyScan: 'currency:warm',
   // renderer -> main: confirm a scan — every vocabulary item becomes a hand statement.
   applyCurrencyScan: 'currency:applyScan',
   // main -> renderer: progress changed (quest completion / inventory), so every

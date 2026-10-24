@@ -1,11 +1,11 @@
 // The currencies-window reader, end to end on a real screenshot: real tesseract, bundled
 // traineddata, no network.
 
-import { test } from 'node:test'
+import { after, before, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { readCurrencyWindow } from '../src/main/currencyScan/index'
+import { createCurrencyReader, type CurrencyReader } from '../src/main/currencyScan/index'
 import { decodePng, encodePng } from '../src/main/currencyScan/png'
 import { locateFingerprint } from '../src/main/currencyScan/locate'
 import { crop } from '../src/main/currencyScan/raster'
@@ -42,10 +42,19 @@ const EXPECTED: Record<string, number> = {
   'Mote of Superior Potential': 1
 }
 
-function assertReads(r: Awaited<ReturnType<typeof readCurrencyWindow>>, expected: Record<string, number>): void {
+function assertReads(r: Awaited<ReturnType<CurrencyReader['read']>>, expected: Record<string, number>): void {
   assert.ok(!('error' in r), 'read')
   assert.deepEqual({ counts: r.counts, unmatched: r.unmatched }, { counts: expected, unmatched: [] })
 }
+
+// One reader (its OCR workers) for the whole file, as the app keeps one warm between scans.
+let reader: CurrencyReader
+before(async () => {
+  reader = await createCurrencyReader(LANG_DIR)
+})
+after(async () => {
+  await reader.close()
+})
 
 test('expected mote names are MOTES names', () => {
   const names = new Set(MOTES.map((m) => m.name))
@@ -59,7 +68,7 @@ function blackCanvas(width: number, height: number): { width: number; height: nu
 }
 
 test('reads every row of the currencies window', async () => {
-  assertReads(await readCurrencyWindow(FIXTURE, LANG_DIR), EXPECTED)
+  assertReads(await reader.read(FIXTURE), EXPECTED)
 })
 
 // A live in-game capture (owner, 2026-10-24) with "Motes of Major Potential" selected: the
@@ -67,7 +76,7 @@ test('reads every row of the currencies window', async () => {
 test('reads a live capture with a selected (highlighted) row', async () => {
   const live = readFileSync(join(import.meta.dirname, 'fixtures', 'currency-live-highlight.png'))
   const expected = { ...EXPECTED, 'Mote of Greater Potential': 13 }
-  assertReads(await readCurrencyWindow(live, LANG_DIR), expected)
+  assertReads(await reader.read(live), expected)
 })
 
 test('finds the window at an offset inside a larger capture', async () => {
@@ -77,11 +86,11 @@ test('finds the window at an offset inside a larger capture', async () => {
   for (let y = 0; y < win.height; y++) {
     canvas.data.set(win.data.subarray(y * win.width * 4, (y + 1) * win.width * 4), ((oy + y) * canvas.width + ox) * 4)
   }
-  assertReads(await readCurrencyWindow(encodePng(canvas), LANG_DIR), EXPECTED)
+  assertReads(await reader.read(encodePng(canvas)), EXPECTED)
 })
 
 test('a remembered fingerprint finds the window by pixels and reads it the same', async () => {
-  const first = await readCurrencyWindow(FIXTURE, LANG_DIR)
+  const first = await reader.read(FIXTURE)
   assert.ok(!('error' in first))
   const win = decodePng(FIXTURE)
   const canvas = blackCanvas(win.width + 900, win.height + 500)
@@ -89,10 +98,10 @@ test('a remembered fingerprint finds the window by pixels and reads it the same'
   for (let y = 0; y < win.height; y++) {
     canvas.data.set(win.data.subarray(y * win.width * 4, (y + 1) * win.width * 4), ((oy + y) * canvas.width + ox) * 4)
   }
-  const inWindow = locateFingerprint(win, first.fingerprint)
+  const inWindow = locateFingerprint(win, first.fingerprint.strip)
   assert.ok(inWindow)
-  assert.deepEqual(locateFingerprint(canvas, first.fingerprint), { x: inWindow.x + ox, y: inWindow.y + oy })
-  assertReads(await readCurrencyWindow(encodePng(canvas), LANG_DIR, first.fingerprint), EXPECTED)
+  assert.deepEqual(locateFingerprint(canvas, first.fingerprint.strip), { x: inWindow.x + ox, y: inWindow.y + oy })
+  assertReads(await reader.read(encodePng(canvas), first.fingerprint), EXPECTED)
 })
 
 test('a fingerprint that is not in the capture is no match', () => {
@@ -101,7 +110,7 @@ test('a fingerprint that is not in the capture is no match', () => {
 })
 
 test('an image without the header is not a currencies window', async () => {
-  assert.deepEqual(await readCurrencyWindow(encodePng(blackCanvas(320, 240)), LANG_DIR), {
+  assert.deepEqual(await reader.read(encodePng(blackCanvas(320, 240))), {
     error: 'not-currency-window'
   })
 })

@@ -3,7 +3,7 @@
 // still counts forward). The planner is pure: two from→to picks over one shared pool.
 
 import type { JSX } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Box,
@@ -149,6 +149,9 @@ export default function MotesView(): JSX.Element {
   )
   const scannedAt = rowsByKey.get(MOTES[0].name.toLowerCase())?.override?.setAt
 
+  useEffect(() => {
+    void window.eq.warmCurrencyScan()
+  }, [])
   const [scan, setScan] = useState<CurrencyScanResult | null>(null)
   const [scanning, setScanning] = useState(false)
   const runScan = async (): Promise<void> => {

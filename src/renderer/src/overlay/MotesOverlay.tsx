@@ -3,7 +3,7 @@
 // Motes tab. A locked overlay is click-through, so the button only works unlocked.
 
 import type { JSX } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CurrencyScanResult } from '@shared/currencyScan'
 import { useOverlayChrome } from './useOverlayChrome'
 import { OverlayHeader } from './OverlayHeader'
@@ -22,6 +22,9 @@ const BUTTON = {
 export default function MotesOverlay(): JSX.Element {
   const { locked, bgAlpha, hovering, toggleLock, onEnter, onLeave, dragRegion, noDrag } =
     useOverlayChrome()
+  useEffect(() => {
+    void window.eqOverlay.warmCurrencyScan()
+  }, [])
   const [scan, setScan] = useState<CurrencyScanResult | null>(null)
   const [status, setStatus] = useState('Open the inventory currency tab, then Scan.')
   const [busy, setBusy] = useState(false)
@@ -35,7 +38,7 @@ export default function MotesOverlay(): JSX.Element {
       setStatus(
         r.ok
           ? r.unmatched.length
-            ? `${r.unmatched.length} unreadable rows — rescan (Confirm would store them as 0).`
+            ? `${r.unmatched.length} unreadable rows. Rescan (Confirm would store them as 0).`
             : `Read ${Object.keys(r.counts).length} items${r.zeroed.length ? `; ${r.zeroed.length} not listed → 0` : ''}.`
           : r.error === 'eq-window-not-found'
             ? 'No EverQuest window found.'

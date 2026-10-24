@@ -39,7 +39,7 @@ export function ScanPreview(props: {
       )}
       {result.unmatched.length > 0 && (
         <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
-          Unreadable rows: {result.unmatched.join(', ')}. Confirm is off — an unreadable row would
+          Unreadable rows: {result.unmatched.join(', ')}. Confirm is off: an unreadable row would
           be stored as 0. Rescan.
         </Typography>
       )}

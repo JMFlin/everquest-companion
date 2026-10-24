@@ -10,6 +10,8 @@ import type { ProgressState } from '../shared/types'
 
 /** The scan pair alone — all the overlay gets. */
 export const scanBridge = {
+  /** A Scan button is on screen: load the OCR workers ahead of the first press. */
+  warmCurrencyScan: (): Promise<void> => ipcRenderer.invoke(IPC.warmCurrencyScan),
   /** Capture the EverQuest window and read its currency list. Nothing is stored until applied. */
   scanCurrency: (): Promise<CurrencyScanResult> => ipcRenderer.invoke(IPC.scanCurrency),
   /** Confirm a scan: main states every vocabulary item's count (absent ⇒ 0) as of now. */

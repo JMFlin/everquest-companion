@@ -1,8 +1,9 @@
 // Reads the EverQuest Legends "currencies" inventory window out of a screenshot.
 //
-// Pipeline: locate the `Name | Expansion | Quantity` header anywhere in the image (absent →
-// not-currency-window), OCR the name column raw and the quantity column binarized + digits-only,
-// pair the two by row y, then resolve names against the closed currency vocabulary.
+// Pipeline: find the `Name | Expansion | Quantity` header (by a remembered pixel fingerprint, else
+// by OCR over the whole capture; absent → not-currency-window), OCR the name column, read every
+// quantity cell under several image settings in stacked batches, then resolve names against the
+// closed currency vocabulary.
 
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,15 +13,33 @@ import { binarizeForOcr, flattenRows, crop, type Rect } from './raster'
 import { currencyVocabulary, matchCurrencyName } from './vocabulary'
 import { locateFingerprint } from './locate'
 
-/** `fingerprint` is the header strip as this capture drew it — pass it to the next scan. */
+/**
+ * The header strip as an earlier capture drew it, plus the three header labels' boxes relative to
+ * the strip's top-left. A pixel match of the strip restores the whole column layout without OCR.
+ */
+export interface Fingerprint {
+  readonly strip: Rgba
+  readonly header: Header
+}
+
 export type CurrencyScan =
-  | { counts: Record<string, number>; unmatched: string[]; fingerprint: Rgba }
+  | { counts: Record<string, number>; unmatched: string[]; fingerprint: Fingerprint }
   | { error: 'not-currency-window' }
 
+export interface CurrencyReader {
+  read(png: Buffer, fingerprint?: Fingerprint): Promise<CurrencyScan>
+  close(): Promise<void>
+}
+
+/** The first two read the name passes side by side; all of them share the quantity cells. */
+const WORKERS = 4
+type Workers = readonly Worker[]
+
 /**
- * Each quantity cell is read alone (PSM single line, digits only) under several upscale/threshold
- * settings; the number every non-empty read agrees on wins, any disagreement leaves it unmatched. One setting cannot read both
- * plain rows and the selected row's light band: tiny "11"s collapse to "1" at the edges.
+ * Every quantity cell is read under several upscale/threshold settings; the number every non-empty
+ * read agrees on wins, any disagreement leaves the row unmatched. One setting cannot read both plain
+ * rows and the selected row's light band: tiny "11"s collapse to "1" at the edges. The third
+ * setting only runs on cells the first two did not settle.
  */
 const DIGIT_VOTES: readonly { scale: number; threshold: number; flatten: boolean }[] = [
   { scale: 3, threshold: 105, flatten: false },
@@ -35,7 +54,7 @@ interface Box {
   readonly y1: number
 }
 
-interface Header {
+export interface Header {
   readonly name: Box
   readonly expansion: Box
   readonly quantity: Box
@@ -48,84 +67,114 @@ interface TextLine {
 }
 
 /**
- * `langDir` holds `eng.traineddata` (see `findOcrLangDir`). Every row the window shows lands in
- * `counts` or, when its name or quantity can't be resolved, verbatim in `unmatched`.
+ * WORKERS tesseract workers (each its own worker_thread) so independent passes run side by side.
+ * `langDir` holds `eng.traineddata` (see `findOcrLangDir`). Close when done.
  */
-export async function readCurrencyWindow(png: Buffer, langDir: string, fingerprint?: Rgba): Promise<CurrencyScan> {
-  const img = decodePng(png)
-  // One tesseract worker (a worker_thread under Node) per scan, always terminated.
-  const worker = await createWorker('eng', OEM.LSTM_ONLY, {
+export async function createCurrencyReader(langDir: string): Promise<CurrencyReader> {
+  const options = {
     // Read-only cache read of `<langDir>/eng.traineddata`: no download, no cache writes.
     // langPath is set too so a miss can never fall back to the default CDN URL.
     cachePath: langDir,
     cacheMethod: 'readOnly',
     langPath: langDir,
     gzip: false
-  })
-  try {
-    // A remembered header strip found by pixels skips OCR-searching the whole capture (~20 s at
-    // 2560x1600): only the window around it is read. No match → the full search.
-    const at = fingerprint && locateFingerprint(img, fingerprint)
-    if (fingerprint && at) {
-      const region: Rect = {
-        x: at.x - fingerprint.width * 0.3,
-        y: at.y - fingerprint.height,
-        width: fingerprint.width * 1.6,
-        height: fingerprint.height * 45
-      }
-      const r = await scan(worker, crop(img, region))
-      if (!('error' in r)) return r
+  }
+  const workers: Workers = await Promise.all(
+    Array.from({ length: WORKERS }, () => createWorker('eng', OEM.LSTM_ONLY, options))
+  )
+  return {
+    read: (png, fingerprint) => read(workers, decodePng(png), fingerprint),
+    close: async () => {
+      await Promise.all(workers.map((w) => w.terminate()))
     }
-    return await scan(worker, img)
-  } finally {
-    await worker.terminate()
   }
 }
 
-async function scan(worker: Worker, img: Rgba): Promise<CurrencyScan> {
-  await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
-  const header = findHeader((await worker.recognize(encodePng(img))).data.words)
-  if (header === null) return { error: 'not-currency-window' }
+async function read(workers: Workers, img: Rgba, fingerprint?: Fingerprint): Promise<CurrencyScan> {
+  const at = fingerprint && locateFingerprint(img, fingerprint.strip)
+  if (fingerprint && at) {
+    const r = await readRows(workers, img, moved(fingerprint.header, at.x, at.y))
+    if (Object.keys(r.counts).length > 0) return r
+  }
+  await workers[0].setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, tessedit_char_whitelist: '' })
+  const header = findHeader((await workers[0].recognize(encodePng(img))).data.words)
+  return header === null ? { error: 'not-currency-window' } : readRows(workers, img, header)
+}
 
+function moved(h: Header, dx: number, dy: number): Header {
+  const box = (b: Box): Box => ({ x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy })
+  return { name: box(h.name), expansion: box(h.expansion), quantity: box(h.quantity) }
+}
+
+async function readRows(
+  workers: Workers,
+  img: Rgba,
+  header: Header
+): Promise<{ counts: Record<string, number>; unmatched: string[]; fingerprint: Fingerprint }> {
   const textHeight = header.name.y1 - header.name.y0
-  const top = header.quantity.y1 + 1
-  const nameRect: Rect = {
-    x: header.name.x0 - 2 * textHeight,
-    y: top,
-    width: header.expansion.x0 - 2 - (header.name.x0 - 2 * textHeight),
-    height: img.height - top
-  }
+  const names = await readNames(workers, img, header)
   const qtyX = (header.expansion.x1 + header.quantity.x0) / 2
-  const qtyRect: Rect = { x: qtyX, y: top, width: header.quantity.x1 + textHeight - qtyX, height: img.height - top }
+  const qtyWidth = header.quantity.x1 + textHeight - qtyX
+  const cells = names.map((n) =>
+    crop(img, { x: qtyX, y: n.yMid - 0.75 * textHeight, width: qtyWidth, height: 1.5 * textHeight })
+  )
+  const qtys = await readQuantities(workers, cells)
+  const rows: Row[] = names.map((n, i) => ({ name: n.text, qty: qtys[i] }))
 
-  await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK, tessedit_char_whitelist: '' })
-  // Plain and row-flattened name passes: each misses rows the other reads (the selected row's
-  // band; the last row of a short window). Per row height, the first line naming an item wins.
-  const raw = textLines(await recognizeCrop(worker, crop(img, nameRect)), nameRect, 1)
-  const flat = textLines(await recognizeCrop(worker, flattenRows(crop(img, nameRect))), nameRect, 1)
-  const names = rowBlock(mergeRows([...raw, ...flat], textHeight), textHeight)
-
-  await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE, tessedit_char_whitelist: '0123456789' })
-  const rows: Row[] = []
-  for (const name of names) {
-    const cell: Rect = { x: qtyX, y: name.yMid - 0.75 * textHeight, width: qtyRect.width, height: 1.5 * textHeight }
-    const reads: string[] = []
-    for (const v of DIGIT_VOTES) {
-      const src = crop(img, cell)
-      const lines = await recognizeCrop(worker, binarizeForOcr(v.flatten ? flattenRows(src) : src, v.scale, v.threshold))
-      reads.push(lines.map((l) => l.text.trim()).join(''))
-      // Two settings already agreeing settles the row; the rest only matter on a split.
-      if (reads.length === 2 && reads[0] !== '' && reads[0] === reads[1]) break
-    }
-    rows.push({ name: name.text, qty: agreed(reads) })
-  }
   const strip: Rect = {
     x: header.name.x0 - 4,
     y: header.name.y0 - 3,
     width: header.quantity.x1 - header.name.x0 + 8,
     height: textHeight + 6
   }
-  return { ...resolveRows(rows), fingerprint: crop(img, strip) }
+  return { ...resolveRows(rows), fingerprint: { strip: crop(img, strip), header: moved(header, -strip.x, -strip.y) } }
+}
+
+/**
+ * Plain and row-flattened name passes, one per worker: each misses rows the other reads (the
+ * selected row's band; the last row of a short window). Per row height, a line naming an item wins.
+ */
+async function readNames(workers: Workers, img: Rgba, header: Header): Promise<TextLine[]> {
+  const textHeight = header.name.y1 - header.name.y0
+  const top = header.quantity.y1 + 1
+  const x = header.name.x0 - 2 * textHeight
+  const rect: Rect = { x, y: top, width: header.expansion.x0 - 2 - x, height: img.height - top }
+  const params = { tessedit_pageseg_mode: PSM.SINGLE_BLOCK, tessedit_char_whitelist: '' }
+  await Promise.all(workers.map((w) => w.setParameters(params)))
+  const [raw, flat] = await Promise.all([
+    recognizeCrop(workers[0], crop(img, rect)),
+    recognizeCrop(workers[1], flattenRows(crop(img, rect)))
+  ])
+  return rowBlock(mergeRows([...textLines(raw, rect, 1), ...textLines(flat, rect, 1)], textHeight), textHeight)
+}
+
+/**
+ * The agreed number per cell (null = unreadable), voting as DIGIT_VOTES describes. Each cell is
+ * read alone (single-line mode: stacking cells into one image loses the "1"s of "11"), and the
+ * cells are shared out across every worker.
+ */
+async function readQuantities(workers: Workers, cells: readonly Rgba[]): Promise<(string | null)[]> {
+  const params = { tessedit_pageseg_mode: PSM.SINGLE_LINE, tessedit_char_whitelist: '0123456789' }
+  await Promise.all(workers.map((w) => w.setParameters(params)))
+  const out: (string | null)[] = []
+  let next = 0
+  await Promise.all(
+    workers.map(async (w) => {
+      for (let i = next++; i < cells.length; i = next++) out[i] = await readCell(w, cells[i])
+    })
+  )
+  return out
+}
+
+async function readCell(worker: Worker, cell: Rgba): Promise<string | null> {
+  const reads: string[] = []
+  for (const v of DIGIT_VOTES) {
+    const img = binarizeForOcr(v.flatten ? flattenRows(cell) : cell, v.scale, v.threshold)
+    reads.push((await recognizeCrop(worker, img)).map((l) => l.text.trim()).join(''))
+    // Two settings already agreeing settles the cell; the third only matters on a split.
+    if (reads.length === 2 && reads[0] !== '' && reads[0] === reads[1]) break
+  }
+  return agreed(reads)
 }
 
 async function recognizeCrop(worker: Worker, img: Rgba): Promise<Line[]> {
