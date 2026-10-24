@@ -339,3 +339,11 @@ test('gear DP with spare copies and banked progress matches exhaustive search', 
     )
   }
 })
+
+test('spell steps are listed smallest mote first, like gear', () => {
+  const spell = planMotes(OWNER, { spell: { from: 0, to: 10 } }).spell as SectionPlan
+  replay(toCounts(OWNER), spell, 'spell')
+  const order = spell.steps.map((s) => (s.kind === 'apply' ? idx(s.mote) : -1))
+  assert.deepEqual(order, [...order].sort((a, b) => a - b))
+  assert.equal(spell.steps[0].kind === 'apply' && spell.steps[0].mote, 'Mote of Infinitesimal Potential')
+})

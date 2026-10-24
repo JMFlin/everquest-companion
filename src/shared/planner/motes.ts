@@ -303,9 +303,10 @@ function planSpell(counts: number[], sel: Selection): SectionPlan {
     }
   }
 
+  // Listed smallest first, like gear's (whose order the tier caps force); a spell's order is free.
   const steps: Step[] = []
   let running = startXp(sel)
-  for (let i = MOTES.length - 1; i >= 0; i--) {
+  for (let i = 0; i < MOTES.length; i++) {
     if (used[i] === 0) continue
     counts[i] -= used[i]
     running += used[i] * MOTES[i].spellXp
