@@ -28,8 +28,11 @@ export type CurrencyScan =
   | { error: 'not-currency-window' }
 
 export interface CurrencyReader {
-  /** `fingerprints`: the saved ones, newest first (one per UI size the user has scanned at). */
-  read(png: Buffer, fingerprints?: readonly Fingerprint[]): Promise<CurrencyScan>
+  /**
+   * A PNG, or already-decoded pixels (the scan worker's raw captures).
+   * `fingerprints`: the saved ones, newest first (one per UI size the user has scanned at).
+   */
+  read(image: Buffer | Rgba, fingerprints?: readonly Fingerprint[]): Promise<CurrencyScan>
   close(): Promise<void>
 }
 
@@ -93,7 +96,7 @@ export async function createCurrencyReader(langDir: string): Promise<CurrencyRea
     Array.from({ length: WORKERS }, () => createWorker('eng', OEM.LSTM_ONLY, options))
   )
   return {
-    read: (png, fingerprints = []) => read(workers, decodePng(png), fingerprints),
+    read: (image, fingerprints = []) => read(workers, Buffer.isBuffer(image) ? decodePng(image) : image, fingerprints),
     close: async () => {
       await Promise.all(workers.map((w) => w.terminate()))
     }
@@ -199,8 +202,8 @@ function locateHeader(img: Rgba, fingerprints: readonly Fingerprint[]): Header |
 }
 
 /** Whether a capture shows a saved fingerprint, by pixels alone: no OCR, about half a second. */
-export function showsCurrencyWindow(png: Buffer, fingerprints: readonly Fingerprint[]): boolean {
-  return locateHeader(decodePng(png), fingerprints) !== null
+export function showsCurrencyWindow(img: Rgba, fingerprints: readonly Fingerprint[]): boolean {
+  return locateHeader(img, fingerprints) !== null
 }
 
 function scaled(h: Header, k: number): Header {

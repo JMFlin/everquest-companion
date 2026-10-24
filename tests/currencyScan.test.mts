@@ -125,9 +125,9 @@ test('a remembered fingerprint finds the window by pixels and reads it the same'
 test('the background check sees the window by its saved fingerprint, and nothing without one', async () => {
   const first = await reader.read(FIXTURE)
   assert.ok(!('error' in first))
-  assert.equal(showsCurrencyWindow(FIXTURE, [first.fingerprint]), true)
-  assert.equal(showsCurrencyWindow(encodePng(blackCanvas(800, 600)), [first.fingerprint]), false)
-  assert.equal(showsCurrencyWindow(FIXTURE, []), false)
+  assert.equal(showsCurrencyWindow(decodePng(FIXTURE), [first.fingerprint]), true)
+  assert.equal(showsCurrencyWindow(blackCanvas(800, 600), [first.fingerprint]), false)
+  assert.equal(showsCurrencyWindow(decodePng(FIXTURE), []), false)
 })
 
 test('a fingerprint that is not in the capture is no match', () => {

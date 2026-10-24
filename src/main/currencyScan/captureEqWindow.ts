@@ -7,6 +7,7 @@ import { desktopCapturer, screen } from 'electron'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { PrintWindowMessage } from '../printWindowWorker'
+import type { RawCapture } from './scanJob'
 
 const EQ_WINDOW = 'EverQuest'
 
@@ -19,8 +20,12 @@ function printEqWindow(): Promise<PrintWindowMessage> {
   })
 }
 
-/** `minimized`: the game window exists but has nothing to draw, so no capture can show it. */
-export async function captureEqImages(): Promise<{ images: Buffer[]; minimized: boolean }> {
+/**
+ * `minimized`: the game window exists but has nothing to draw, so no capture can show it.
+ * Thumbnails are handed over as raw BGRA (a buffer copy): encoding three full-screen PNGs here
+ * would block the main process; the scan worker converts them.
+ */
+export async function captureEqImages(): Promise<{ images: RawCapture[]; minimized: boolean }> {
   const printed = await printEqWindow()
   if (!printed.ok && printed.reason === 'minimized') return { images: [], minimized: true }
   // One thumbnail box for all sources: the largest display at native pixels, so nothing scales up.
@@ -36,9 +41,11 @@ export async function captureEqImages(): Promise<{ images: Buffer[]; minimized: 
   })
   const eq = sources.filter((s) => s.id.startsWith('window:') && s.name.startsWith(EQ_WINDOW))
   const screens = sources.filter((s) => s.id.startsWith('screen:'))
-  const images = [
-    ...(printed.ok ? [Buffer.from(printed.png)] : []),
-    ...[...eq, ...screens].filter((s) => !s.thumbnail.isEmpty()).map((s) => s.thumbnail.toPNG())
+  const images: RawCapture[] = [
+    ...(printed.ok ? [{ png: printed.png }] : []),
+    ...[...eq, ...screens]
+      .filter((s) => !s.thumbnail.isEmpty())
+      .map((s) => ({ bgra: s.thumbnail.toBitmap(), ...s.thumbnail.getSize() }))
   ]
   return { images, minimized: false }
 }

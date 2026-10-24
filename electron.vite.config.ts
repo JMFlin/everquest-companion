@@ -69,6 +69,8 @@ export default defineConfig({
         //     main does not. Two threads late in the same half second means the MACHINE stalled;
         //     only main late means we did. A rollup into index.js would leave the verdict
         //     unmeasurable, which is the strongest form of "this needs its own entry".
+        //   * currencyScanWorker — the currency scan's decoding, pixel search and OCR
+        //     orchestration, so a scan or background rescan never stalls the main process.
         //   * printWindowWorker — the currency scan's PrintWindow capture. Main never loads koffi
         //     (presenceNative.ts), so the native GDI calls get a thread of their own.
         input: {
@@ -77,7 +79,8 @@ export default defineConfig({
           presenceWorker: resolve(__dirname, 'src/main/presenceWorker.ts'),
           perfProbeWorker: resolve(__dirname, 'src/main/perfProbeWorker.ts'),
           resistTableWorker: resolve(__dirname, 'src/main/resistTableWorker.ts'),
-          printWindowWorker: resolve(__dirname, 'src/main/printWindowWorker.ts')
+          printWindowWorker: resolve(__dirname, 'src/main/printWindowWorker.ts'),
+          currencyScanWorker: resolve(__dirname, 'src/main/currencyScanWorker.ts')
         }
       }
     }
