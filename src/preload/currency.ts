@@ -7,6 +7,7 @@ import { ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
 import type { CurrencyScanResult } from '../shared/currencyScan'
 import type { ProgressState } from '../shared/types'
+import type { ItemCountOverride } from '../shared/itemOverrides'
 
 /** The scan pair alone — all the overlay gets. */
 export const scanBridge = {
@@ -16,9 +17,14 @@ export const scanBridge = {
   cancelCurrencyScan: (): Promise<void> => ipcRenderer.invoke(IPC.cancelCurrencyScan),
   /** Capture the EverQuest window and read its currency list. Nothing is stored until applied. */
   scanCurrency: (): Promise<CurrencyScanResult> => ipcRenderer.invoke(IPC.scanCurrency),
-  /** Confirm a scan: main states every vocabulary item's count (absent ⇒ 0) as of now. */
-  applyCurrencyScan: (counts: Record<string, number>): Promise<ProgressState> =>
-    ipcRenderer.invoke(IPC.applyCurrencyScan, counts)
+  /** The held-count statements in force (the overlay counts held motes from these + loot). */
+  getHeldStatements: (): Promise<ItemCountOverride[]> => ipcRenderer.invoke(IPC.getHeldStatements),
+  /** A scan was saved; re-read the statements. */
+  onHeldStatements: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.onHeldStatements, listener)
+    return () => ipcRenderer.removeListener(IPC.onHeldStatements, listener)
+  }
 }
 
 export const currencyBridge = {

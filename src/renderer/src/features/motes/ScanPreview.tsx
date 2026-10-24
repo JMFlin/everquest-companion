@@ -1,8 +1,11 @@
-// ScanPreview — what the OCR read, shown before anything is stored. Confirm states every count.
+// ScanPreview — what the last scan read. A scan that read every row is already saved; one with an
+// unreadable row saved nothing. Only motes are shown; runes are scanned and saved but not listed.
 
 import type { JSX } from 'react'
-import { Alert, Button, Stack, Typography } from '@mui/material'
+import { Alert, Typography } from '@mui/material'
 import type { CurrencyScanError, CurrencyScanResult } from '@shared/currencyScan'
+import { MOTES } from '@shared/planner/motes'
+import { shortMote } from './usePlanner'
 
 const ERRORS: Record<CurrencyScanError, string> = {
   cancelled: 'Scan stopped.',
@@ -12,52 +15,31 @@ const ERRORS: Record<CurrencyScanError, string> = {
     'Could not find the currency list. Open the inventory currency tab in game and try again.'
 }
 
-export function ScanPreview(props: {
-  result: CurrencyScanResult
-  onConfirm: (counts: Record<string, number>) => void
-  onCancel: () => void
-}): JSX.Element {
+/** One line on what a scan did, shared by the tab and the overlay. */
+export function scanSummary(result: CurrencyScanResult): string {
+  if (!result.ok) return ERRORS[result.error]
+  if (!result.saved) return `Not saved: ${result.unmatched.length} unreadable row(s). Rescan.`
+  return `Saved ${new Date().toLocaleTimeString()}. Loot now counts forward.`
+}
+
+export function ScanPreview(props: { result: CurrencyScanResult; onClose: () => void }): JSX.Element {
   const { result } = props
-  if (!result.ok) {
+  if (!result.ok || !result.saved) {
     return (
-      <Alert severity="warning" onClose={props.onCancel}>
-        {ERRORS[result.error]}
+      <Alert severity="warning" onClose={props.onClose} sx={{ my: 1 }}>
+        {scanSummary(result)}
+        {result.ok && (
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            Unreadable: {result.unmatched.join(', ')}
+          </Typography>
+        )}
       </Alert>
     )
   }
-  const entries = Object.entries(result.counts)
+  const motes = MOTES.filter((m) => m.name in result.counts).map((m) => `${shortMote(m.name)} ${result.counts[m.name]}`)
   return (
-    <Alert severity="success" data-testid="motes-scan-preview" sx={{ my: 1 }}>
-      <Typography variant="body2" sx={{ mb: 1 }}>
-        Read {entries.length} items. Confirm to set these as your held counts.
-      </Typography>
-      <Typography variant="body2" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-        {entries.map(([name, n]) => `${name}: ${n}`).join('\n')}
-      </Typography>
-      {result.zeroed.length > 0 && (
-        <Typography variant="body2" sx={{ mt: 1 }}>
-          Not in the window, will be set to 0: {result.zeroed.join(', ')}
-        </Typography>
-      )}
-      {result.unmatched.length > 0 && (
-        <Typography variant="body2" color="warning.main" sx={{ mt: 1 }}>
-          Unreadable rows: {result.unmatched.join(', ')}. Confirm is off: an unreadable row would
-          be stored as 0. Rescan.
-        </Typography>
-      )}
-      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-        <Button
-          size="small"
-          variant="contained"
-          disabled={result.unmatched.length > 0}
-          onClick={() => props.onConfirm(result.counts)}
-        >
-          Confirm
-        </Button>
-        <Button size="small" onClick={props.onCancel}>
-          Cancel
-        </Button>
-      </Stack>
+    <Alert severity="success" onClose={props.onClose} sx={{ my: 1 }} data-testid="motes-scan-preview">
+      {scanSummary(result)} Read: {motes.join(', ')}.
     </Alert>
   )
 }

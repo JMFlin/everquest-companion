@@ -33,8 +33,10 @@ export const IPC = {
   cancelCurrencyScan: 'currency:cancel',
   // renderer -> main: a Scan button is on screen — start the OCR workers now.
   warmCurrencyScan: 'currency:warm',
-  // renderer -> main: confirm a scan — every vocabulary item becomes a hand statement.
-  applyCurrencyScan: 'currency:applyScan',
+  // renderer -> main: the active character's held-count statements (the motes overlay counts from them).
+  getHeldStatements: 'currency:getStatements',
+  // main -> motes overlay: a scan was saved; re-read the statements.
+  onHeldStatements: 'currency:statementsChanged',
   // main -> renderer: progress changed (quest completion / inventory), so every
   // view that shows progress stays consistent without re-fetching on a timer.
   onProgress: 'progress:changed',

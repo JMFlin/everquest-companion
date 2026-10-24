@@ -1,5 +1,5 @@
-// IPC: scan the EverQuest currency window, and confirm a scan into held-count statements.
-// A confirmed scan states EVERY vocabulary item (an item the window did not list is 0), dated now,
+// IPC: scan the EverQuest currency window. A scan that reads every row is saved at once as
+// held-count statements: EVERY vocabulary item (an item the window did not list is 0), dated now,
 // so loot after it still counts forward (shared/itemOverrides.ts).
 
 import { app, ipcMain } from 'electron'
@@ -12,8 +12,8 @@ import { createCurrencyReader, findOcrLangDir, type CurrencyReader, type Fingerp
 import { currencyVocabulary } from '../currencyScan/vocabulary'
 import { decodePng, encodePng } from '../currencyScan/png'
 import { activeCharId } from '../session'
-import { setItemOverride } from '../storeItemOverrides'
-import { sendToMain } from '../windows'
+import { getItemOverrides, setItemOverride } from '../storeItemOverrides'
+import { getOverlayWindow, sendToMain } from '../windows'
 
 /** OCR workers stay up this long after the last warm/scan, so a scan right after opening is fast. */
 const IDLE_CLOSE_MS = 3 * 60_000
@@ -129,10 +129,28 @@ async function scanOnce(cancelled: () => boolean): Promise<CurrencyScanResult> {
     if (!('error' in r)) {
       saveFingerprint(dir, r.fingerprint)
       const zeroed = currencyVocabulary().filter((n) => !(n in r.counts))
-      return { ok: true, counts: r.counts, unmatched: r.unmatched, zeroed }
+      // A scan that read every row is saved at once; one unreadable row would be stated as 0,
+      // so then nothing is saved and the user rescans.
+      const saved = r.unmatched.length === 0
+      if (saved) state(r.counts)
+      return { ok: true, counts: r.counts, unmatched: r.unmatched, zeroed, saved }
     }
   }
   return { ok: false, error: 'not-currency-window' }
+}
+
+/**
+ * Every vocabulary item becomes a hand statement dated now (absent from the window ⇒ 0). Both
+ * windows hear about it: the main one through its progress push, the motes overlay directly.
+ */
+function state(counts: Record<string, number>): void {
+  const charId = activeCharId()
+  let progress = null
+  for (const name of currencyVocabulary()) {
+    progress = setItemOverride(charId, name.toLowerCase(), name, counts[name] ?? 0)
+  }
+  sendToMain(IPC.onProgress, progress)
+  getOverlayWindow('motes')?.webContents.send(IPC.onHeldStatements)
 }
 
 export function registerCurrencyIpc(): void {
@@ -145,15 +163,6 @@ export function registerCurrencyIpc(): void {
   ipcMain.handle(IPC.cancelCurrencyScan, () => {
     cancel()
   })
-  ipcMain.handle(IPC.applyCurrencyScan, (_e, counts: Record<string, number>) => {
-    const vocab = currencyVocabulary()
-    for (const name of Object.keys(counts)) {
-      if (!vocab.includes(name)) throw new Error(`not a currency item: ${name}`)
-    }
-    const charId = activeCharId()
-    let progress = null
-    for (const name of vocab) progress = setItemOverride(charId, name.toLowerCase(), name, counts[name] ?? 0)
-    sendToMain(IPC.onProgress, progress)
-    return progress
-  })
+  // The overlay has no progress record of its own; it reads the statements to count held motes.
+  ipcMain.handle(IPC.getHeldStatements, () => getItemOverrides(activeCharId()))
 }

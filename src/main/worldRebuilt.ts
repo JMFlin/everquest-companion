@@ -30,7 +30,7 @@ import type { CharacterRef, OverlayKind } from '../shared/types'
 // the mote rates — and needs the rebuild signal below at least as much as the timer windows do:
 // its whole subject is a fold over months of log, and a window open at launch hydrates part-way
 // through one.
-export const MODULE_READING_OVERLAYS: OverlayKind[] = ['events', 'buffs', 'debuffs', 'xp', 'respawn']
+export const MODULE_READING_OVERLAYS: OverlayKind[] = ['events', 'buffs', 'debuffs', 'xp', 'respawn', 'motes']
 
 /**
  * Push to every overlay window that reads modules.
