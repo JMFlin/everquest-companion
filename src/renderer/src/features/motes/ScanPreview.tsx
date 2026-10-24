@@ -2,9 +2,10 @@
 
 import type { JSX } from 'react'
 import { Alert, Button, Stack, Typography } from '@mui/material'
-import type { CurrencyScanResult } from '@shared/currencyScan'
+import type { CurrencyScanError, CurrencyScanResult } from '@shared/currencyScan'
 
-const ERRORS: Record<'eq-window-not-found' | 'not-currency-window', string> = {
+const ERRORS: Record<CurrencyScanError, string> = {
+  cancelled: 'Scan stopped.',
   'eq-window-not-found': 'No EverQuest window found. Is the game running?',
   'not-currency-window':
     'Could not find the currency list (Name / Expansion / Quantity). Open the inventory currency tab and try again.'

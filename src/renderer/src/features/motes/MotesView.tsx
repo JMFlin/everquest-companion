@@ -174,6 +174,11 @@ export default function MotesView(): JSX.Element {
           <Button variant="contained" size="small" disabled={scanning} onClick={() => void runScan()}>
             {scanning ? 'Scanning…' : 'Scan currency window'}
           </Button>
+          {scanning && (
+            <Button size="small" color="warning" onClick={() => void window.eq.cancelCurrencyScan()}>
+              Stop
+            </Button>
+          )}
         </Stack>
         {scan && (
           <ScanPreview

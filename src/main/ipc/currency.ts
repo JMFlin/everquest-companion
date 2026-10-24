@@ -20,6 +20,24 @@ const IDLE_CLOSE_MS = 3 * 60_000
 
 let reader: Promise<CurrencyReader> | null = null
 let idle: NodeJS.Timeout | null = null
+/** Bumped by a cancel; a scan that started under an older value answers `cancelled`. */
+let generation = 0
+/** Resolvers of the scans in flight; a cancel answers them at once. */
+const waiting = new Set<() => void>()
+
+/**
+ * Stop any scan: its caller is answered `cancelled` now, and the workers are terminated (which
+ * does NOT reject the recognize call in flight, so that call is simply abandoned).
+ */
+function cancel(): void {
+  generation++
+  for (const answer of waiting) answer()
+  waiting.clear()
+  if (idle) clearTimeout(idle)
+  const current = reader
+  reader = null
+  void current?.then((r) => r.close())
+}
 
 /** The shared reader, started on first use; every use pushes back its idle close. */
 function useReader(): Promise<CurrencyReader> {
@@ -57,6 +75,23 @@ function saveFingerprint(dir: string, fp: Fingerprint): void {
 }
 
 async function scan(): Promise<CurrencyScanResult> {
+  const mine = generation
+  let answer = (): void => undefined
+  const stopped = new Promise<CurrencyScanResult>((resolve) => {
+    answer = () => resolve({ ok: false, error: 'cancelled' })
+    waiting.add(answer)
+  })
+  try {
+    const work = scanOnce(() => mine !== generation)
+    // A cancelled scan's work is abandoned, not awaited: its late failure must not go unhandled.
+    work.catch(() => undefined)
+    return await Promise.race([work, stopped])
+  } finally {
+    waiting.delete(answer)
+  }
+}
+
+async function scanOnce(cancelled: () => boolean): Promise<CurrencyScanResult> {
   const ocr = useReader()
   const images = await captureEqImages()
   if (images.length === 0) return { ok: false, error: 'eq-window-not-found' }
@@ -65,7 +100,9 @@ async function scan(): Promise<CurrencyScanResult> {
   images.forEach((png, i) => writeFileSync(join(dir, `capture-${i}.png`), png))
   const fingerprint = loadFingerprint(dir)
   for (const png of images) {
+    if (cancelled()) return { ok: false, error: 'cancelled' }
     const r = await (await ocr).read(png, fingerprint)
+    if (cancelled()) return { ok: false, error: 'cancelled' }
     if (!('error' in r)) {
       saveFingerprint(dir, r.fingerprint)
       const zeroed = currencyVocabulary().filter((n) => !(n in r.counts))
@@ -82,6 +119,9 @@ export function registerCurrencyIpc(): void {
     await useReader()
   })
   ipcMain.handle(IPC.scanCurrency, () => scan())
+  ipcMain.handle(IPC.cancelCurrencyScan, () => {
+    cancel()
+  })
   ipcMain.handle(IPC.applyCurrencyScan, (_e, counts: Record<string, number>) => {
     const vocab = currencyVocabulary()
     for (const name of Object.keys(counts)) {

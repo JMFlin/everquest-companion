@@ -12,6 +12,8 @@ import type { ProgressState } from '../shared/types'
 export const scanBridge = {
   /** A Scan button is on screen: load the OCR workers ahead of the first press. */
   warmCurrencyScan: (): Promise<void> => ipcRenderer.invoke(IPC.warmCurrencyScan),
+  /** Stop the scan in progress; its `scanCurrency` promise answers `cancelled`. */
+  cancelCurrencyScan: (): Promise<void> => ipcRenderer.invoke(IPC.cancelCurrencyScan),
   /** Capture the EverQuest window and read its currency list. Nothing is stored until applied. */
   scanCurrency: (): Promise<CurrencyScanResult> => ipcRenderer.invoke(IPC.scanCurrency),
   /** Confirm a scan: main states every vocabulary item's count (absent ⇒ 0) as of now. */

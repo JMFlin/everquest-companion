@@ -5,4 +5,6 @@
 export type CurrencyScanResult =
   // `zeroed`: vocabulary items the window did not list — a confirm states them as 0.
   | { ok: true; counts: Record<string, number>; unmatched: string[]; zeroed: string[] }
-  | { ok: false; error: 'eq-window-not-found' | 'not-currency-window' }
+  | { ok: false; error: CurrencyScanError }
+
+export type CurrencyScanError = 'eq-window-not-found' | 'not-currency-window' | 'cancelled'
