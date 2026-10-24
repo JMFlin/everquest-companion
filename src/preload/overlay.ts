@@ -20,6 +20,7 @@ import type { BuffAllowPrefs } from '../shared/buffAllow'
 import type { ToastPayload } from '../shared/toast'
 import type { AlertBannerPayload } from '../shared/alertBanner'
 import type { ConCardPayload } from '../shared/conCard'
+import { scanBridge } from './currency'
 
 export type { CombatSnapshot, SnapshotOpts, OverlayConfig, OverlayDrill, OverlayKind, MobKnowledge }
 
@@ -396,7 +397,10 @@ const overlayApi = {
   fitHeight: (height: number): void => ipcRenderer.send(IPC.overlayFitHeight, KIND, height),
 
   /** Close this overlay from its own close button (interactive mode only). */
-  close: (): void => ipcRenderer.send(IPC.overlayClose, KIND)
+  close: (): void => ipcRenderer.send(IPC.overlayClose, KIND),
+
+  /** The motes overlay's Scan button. */
+  ...scanBridge
 }
 
 export type EqOverlayApi = typeof overlayApi

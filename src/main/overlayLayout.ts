@@ -513,5 +513,6 @@ export const OVERLAY_TITLE: Partial<Record<OverlayKind, string>> = {
   xp: 'XP Overlay',
   respawn: 'Respawn Timer Overlay',
   alertBanner: 'Alert Banner Overlay',
-  conCard: 'Mob Card Overlay'
+  conCard: 'Mob Card Overlay',
+  motes: 'Motes Overlay'
 }

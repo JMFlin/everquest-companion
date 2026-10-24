@@ -59,7 +59,10 @@ import type { ConCardChip, ConCardPayload } from '../src/shared/conCard'
 
 test('the con card is an overlay kind, appended after every meter, and holds no meter slot', () => {
   assert.ok(OVERLAY_KINDS.includes('conCard'), 'the kind exists')
-  assert.equal(OVERLAY_KINDS[OVERLAY_KINDS.length - 1], 'conCard', 'APPENDED - see shared/types.ts')
+  assert.ok(
+    OVERLAY_KINDS.indexOf('conCard') > OVERLAY_KINDS.indexOf('respawn'),
+    'APPENDED after every meter - see shared/types.ts'
+  )
   assert.ok(!METER_KINDS.includes('conCard'), 'a strip is not a meter and must not consume a dock slot')
 })
 

@@ -62,7 +62,7 @@ export type HotZoneStyle = 'chrome' | 'window' | 'none'
  * overlays, which pass no `capture` to `OverlayContent` and put `onMouseEnter={onEnter}` on their
  * root instead (EventLogOverlay.tsx, BuffsOverlay.tsx).
  */
-const WHOLE_WINDOW_KINDS: OverlayKind[] = ['events', 'buffs', 'debuffs']
+const WHOLE_WINDOW_KINDS: OverlayKind[] = ['events', 'buffs', 'debuffs', 'motes']
 
 /**
  * HOW TALL THE CHROME STRIP IS, in the window's own px.

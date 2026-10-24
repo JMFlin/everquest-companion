@@ -93,7 +93,7 @@ test('THE PIN IS REVEALED BY A HIT TEST, and it is scoped to the chrome — not 
   // The three answers, each mirroring the sensor that kind's renderer already runs. A meter that
   // published its whole window would take back exactly the click-through P3 exists to protect.
   assert.match(zones, /export type HotZoneStyle = 'chrome' \| 'window' \| 'none'/)
-  assert.match(zones, /const WHOLE_WINDOW_KINDS: OverlayKind\[\] = \['events', 'buffs', 'debuffs'\]/)
+  assert.match(zones, /const WHOLE_WINDOW_KINDS: OverlayKind\[\] = \['events', 'buffs', 'debuffs', 'motes'\]/)
   // The strips never had a hover sensor and must never grow one here: their capture is their queue's.
   assert.match(zones, /if \(isStripKind\(kind\)\) return 'none'/)
   // MAIN ONLY EVER OPENS THE DOOR. A main-side release on the way out of the strip would close the
