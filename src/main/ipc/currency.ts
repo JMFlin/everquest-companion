@@ -3,13 +3,14 @@
 // so loot after it still counts forward (shared/itemOverrides.ts).
 
 import { app, ipcMain } from 'electron'
-import { mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { IPC } from '../../shared/ipc'
 import type { CurrencyScanResult } from '../../shared/currencyScan'
 import { captureEqImages } from '../currencyScan/captureEqWindow'
 import { findOcrLangDir, readCurrencyWindow } from '../currencyScan'
 import { currencyVocabulary } from '../currencyScan/vocabulary'
+import { decodePng, encodePng } from '../currencyScan/png'
 import { activeCharId } from '../session'
 import { setItemOverride } from '../storeItemOverrides'
 import { sendToMain } from '../windows'
@@ -23,10 +24,15 @@ async function scan(): Promise<CurrencyScanResult> {
   images.forEach((png, i) => writeFileSync(join(dir, `capture-${i}.png`), png))
   const langDir = findOcrLangDir(app.getAppPath(), process.resourcesPath, process.cwd())
   if (!langDir) throw new Error('OCR language data (resources/ocr/eng.traineddata) is missing')
+  // The header strip from the last good scan: lets the next one find the window by pixels.
+  const fpPath = join(dir, 'fingerprint.png')
+  const fingerprint = existsSync(fpPath) ? decodePng(readFileSync(fpPath)) : undefined
   for (const png of images) {
-    const r = await readCurrencyWindow(png, langDir)
+    const r = await readCurrencyWindow(png, langDir, fingerprint)
     if (!('error' in r)) {
-      return { ok: true, ...r, zeroed: currencyVocabulary().filter((n) => !(n in r.counts)) }
+      writeFileSync(fpPath, encodePng(r.fingerprint))
+      const zeroed = currencyVocabulary().filter((n) => !(n in r.counts))
+      return { ok: true, counts: r.counts, unmatched: r.unmatched, zeroed }
     }
   }
   return { ok: false, error: 'not-currency-window' }

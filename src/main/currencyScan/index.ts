@@ -10,9 +10,11 @@ import { createWorker, OEM, PSM, type Line, type Word, type Worker } from 'tesse
 import { decodePng, encodePng, type Rgba } from './png'
 import { binarizeForOcr, flattenRows, crop, type Rect } from './raster'
 import { currencyVocabulary, matchCurrencyName } from './vocabulary'
+import { locateFingerprint } from './locate'
 
+/** `fingerprint` is the header strip as this capture drew it — pass it to the next scan. */
 export type CurrencyScan =
-  | { counts: Record<string, number>; unmatched: string[] }
+  | { counts: Record<string, number>; unmatched: string[]; fingerprint: Rgba }
   | { error: 'not-currency-window' }
 
 /**
@@ -49,7 +51,7 @@ interface TextLine {
  * `langDir` holds `eng.traineddata` (see `findOcrLangDir`). Every row the window shows lands in
  * `counts` or, when its name or quantity can't be resolved, verbatim in `unmatched`.
  */
-export async function readCurrencyWindow(png: Buffer, langDir: string): Promise<CurrencyScan> {
+export async function readCurrencyWindow(png: Buffer, langDir: string, fingerprint?: Rgba): Promise<CurrencyScan> {
   const img = decodePng(png)
   // One tesseract worker (a worker_thread under Node) per scan, always terminated.
   const worker = await createWorker('eng', OEM.LSTM_ONLY, {
@@ -61,6 +63,19 @@ export async function readCurrencyWindow(png: Buffer, langDir: string): Promise<
     gzip: false
   })
   try {
+    // A remembered header strip found by pixels skips OCR-searching the whole capture (~20 s at
+    // 2560x1600): only the window around it is read. No match → the full search.
+    const at = fingerprint && locateFingerprint(img, fingerprint)
+    if (fingerprint && at) {
+      const region: Rect = {
+        x: at.x - fingerprint.width * 0.3,
+        y: at.y - fingerprint.height,
+        width: fingerprint.width * 1.6,
+        height: fingerprint.height * 45
+      }
+      const r = await scan(worker, crop(img, region))
+      if (!('error' in r)) return r
+    }
     return await scan(worker, img)
   } finally {
     await worker.terminate()
@@ -104,7 +119,13 @@ async function scan(worker: Worker, img: Rgba): Promise<CurrencyScan> {
     }
     rows.push({ name: name.text, qty: agreed(reads) })
   }
-  return resolveRows(rows)
+  const strip: Rect = {
+    x: header.name.x0 - 4,
+    y: header.name.y0 - 3,
+    width: header.quantity.x1 - header.name.x0 + 8,
+    height: textHeight + 6
+  }
+  return { ...resolveRows(rows), fingerprint: crop(img, strip) }
 }
 
 async function recognizeCrop(worker: Worker, img: Rgba): Promise<Line[]> {
@@ -174,7 +195,7 @@ function agreed(reads: readonly string[]): string | null {
 }
 
 /** Every row lands in `counts` or, verbatim, in `unmatched`. */
-function resolveRows(rows: readonly Row[]): CurrencyScan {
+function resolveRows(rows: readonly Row[]): { counts: Record<string, number>; unmatched: string[] } {
   const vocab = currencyVocabulary()
   const counts: Record<string, number> = {}
   const unmatched: string[] = []
