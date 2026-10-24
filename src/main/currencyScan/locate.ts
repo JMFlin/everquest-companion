@@ -6,7 +6,7 @@ import type { Rgba } from './png'
 
 const COARSE = 4
 /** NCC at or above this is the same strip; text on a dark textured background scores ~0.95+. */
-const MATCH = 0.85
+export const MATCH = 0.85
 
 interface Grey {
   readonly width: number
@@ -90,12 +90,27 @@ function best(g: Grey, t: Template, span: Span): { x: number; y: number; score: 
   return hit
 }
 
+/** A capture's greyscale at full and coarse resolution, computed once for several searches. */
+export interface Prepared {
+  readonly g: Grey
+  readonly cg: Grey
+}
+
+export function prepare(img: Rgba): Prepared {
+  const g = grey(img)
+  return { g, cg: shrink(g, COARSE) }
+}
+
 /** Top-left of `fingerprint` in `img`, or null when nothing matches well enough. */
 export function locateFingerprint(img: Rgba, fingerprint: Rgba): { x: number; y: number } | null {
-  if (fingerprint.width > img.width || fingerprint.height > img.height) return null
-  const g = grey(img)
+  return locateIn(prepare(img), fingerprint, MATCH)
+}
+
+/** As locateFingerprint, on a prepared capture and with the caller's match bar. */
+export function locateIn(capture: Prepared, fingerprint: Rgba, minScore: number): { x: number; y: number } | null {
+  const { g, cg } = capture
+  if (fingerprint.width > g.width || fingerprint.height > g.height) return null
   const t = grey(fingerprint)
-  const cg = shrink(g, COARSE)
   const ct = shrink(t, COARSE)
   if (ct.width < 4 || ct.height < 2) return null
   const coarse = best(cg, template(ct), { x0: 0, x1: cg.width, y0: 0, y1: cg.height })
@@ -106,5 +121,5 @@ export function locateFingerprint(img: Rgba, fingerprint: Rgba): { x: number; y:
     y0: (coarse.y - 1) * COARSE,
     y1: (coarse.y + 1) * COARSE
   })
-  return fine.score >= MATCH ? { x: fine.x, y: fine.y } : null
+  return fine.score >= minScore ? { x: fine.x, y: fine.y } : null
 }

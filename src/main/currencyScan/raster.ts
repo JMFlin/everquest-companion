@@ -35,8 +35,8 @@ export function binarizeForOcr(img: Rgba, scale: number, threshold: number): Rgb
     const a = img.data[i * 4 + 3] / 255
     grey[i] = a * (0.299 * img.data[i * 4] + 0.587 * img.data[i * 4 + 1] + 0.114 * img.data[i * 4 + 2])
   }
-  const width = img.width * scale
-  const height = img.height * scale
+  const width = Math.round(img.width * scale)
+  const height = Math.round(img.height * scale)
   const data = new Uint8Array(width * height * 4)
   for (let y = 0; y < height; y++) {
     const sy = Math.min(img.height - 1, Math.max(0, (y + 0.5) / scale - 0.5))
@@ -106,4 +106,37 @@ export function upscale(img: Rgba, k: number): Rgba {
     }
   }
   return { width, height, data }
+}
+
+/**
+ * `img` scaled by `k`: area-averaged when shrinking (bilinear sampling would skip whole pixel
+ * columns of thin glyph strokes), bilinear when enlarging.
+ */
+export function resize(img: Rgba, k: number): Rgba {
+  if (k >= 1) return upscale(img, k)
+  const width = Math.max(1, Math.round(img.width * k))
+  const height = Math.max(1, Math.round(img.height * k))
+  const data = new Uint8Array(width * height * 4)
+  for (let y = 0; y < height; y++) {
+    const sy0 = Math.floor(y / k)
+    const sy1 = Math.min(img.height, Math.max(sy0 + 1, Math.floor((y + 1) / k)))
+    for (let x = 0; x < width; x++) {
+      const sx0 = Math.floor(x / k)
+      const sx1 = Math.min(img.width, Math.max(sx0 + 1, Math.floor((x + 1) / k)))
+      areaMean(img, { x: sx0, y: sy0, width: sx1 - sx0, height: sy1 - sy0 }, data, (y * width + x) * 4)
+    }
+  }
+  return { width, height, data }
+}
+
+/** Mean RGBA of `r` written to `out` at `at`. */
+function areaMean(img: Rgba, r: Rect, out: Uint8Array, at: number): void {
+  const sum = [0, 0, 0, 0]
+  for (let y = r.y; y < r.y + r.height; y++) {
+    for (let x = r.x; x < r.x + r.width; x++) {
+      for (let c = 0; c < 4; c++) sum[c] += img.data[(y * img.width + x) * 4 + c]
+    }
+  }
+  const n = r.width * r.height
+  for (let c = 0; c < 4; c++) out[at + c] = Math.round(sum[c] / n)
 }

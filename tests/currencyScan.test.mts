@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { createCurrencyReader, findHeader, type CurrencyReader } from '../src/main/currencyScan/index'
 import { decodePng, encodePng } from '../src/main/currencyScan/png'
 import { locateFingerprint } from '../src/main/currencyScan/locate'
-import { crop } from '../src/main/currencyScan/raster'
+import { crop, resize } from '../src/main/currencyScan/raster'
 import { currencyVocabulary, matchCurrencyName } from '../src/main/currencyScan/vocabulary'
 import { MOTES } from '../src/shared/planner/motes'
 
@@ -108,7 +108,7 @@ test('a remembered fingerprint finds the window by pixels and reads it the same'
   const inWindow = locateFingerprint(win, first.fingerprint.strip)
   assert.ok(inWindow)
   assert.deepEqual(locateFingerprint(canvas, first.fingerprint.strip), { x: inWindow.x + ox, y: inWindow.y + oy })
-  assertReads(await reader.read(encodePng(canvas), first.fingerprint), EXPECTED)
+  assertReads(await reader.read(encodePng(canvas), [first.fingerprint]), EXPECTED)
 })
 
 test('a fingerprint that is not in the capture is no match', () => {
@@ -139,4 +139,50 @@ test('the header words in running text are not a header (they once matched this 
   assert.equal(findHeader([word('(Name', 4, 55), word('Expansion', 72, 149), word('Quantity).', 166, 241)]), null)
   // The real window's columns are far apart.
   assert.ok(findHeader([word('Name', 57, 95), word('Expansion', 275, 345), word('Quantity', 465, 522)]))
+})
+
+// ---- other screens / UI scales -------------------------------------------------------------
+// The goldens are 9-12 px text. A bigger screen or UI scale draws the same window larger; these
+// rescale the goldens (bilinear up, area down: softer than a real large UI, so harsher).
+
+const LIVE_EXPECTED = { ...EXPECTED, 'Mote of Greater Potential': 13 }
+const fixture = (name: string): Buffer => readFileSync(join(import.meta.dirname, 'fixtures', `${name}.png`))
+const rescaled = (name: string, k: number): Buffer => encodePng(resize(decodePng(fixture(name)), k))
+
+for (const [name, k, expected] of [
+  ['currency-window', 1.5, EXPECTED],
+  ['currency-window', 2, EXPECTED],
+  ['currency-live-highlight', 1.75, LIVE_EXPECTED]
+] as const) {
+  test(`reads every row of ${name} drawn ${k}x larger`, async () => {
+    assertReads(await reader.read(rescaled(name, k)), expected)
+  })
+}
+
+// Selected rows at these sizes can come out unreadable (Confirm then stays off); what may NEVER
+// happen at any size is a wrong number.
+for (const [name, k, expected] of [
+  ['currency-live-highlight', 0.8, LIVE_EXPECTED],
+  ['currency-printwindow', 1.5, LIVE_EXPECTED],
+  ['currency-printwindow', 2.5, LIVE_EXPECTED]
+] as const) {
+  test(`every number read from ${name} drawn ${k}x is right`, async () => {
+    const r = await reader.read(rescaled(name, k))
+    assert.ok(!('error' in r), 'read')
+    for (const [item, n] of Object.entries(r.counts)) assert.equal(n, expected[item], item)
+    assert.ok(Object.keys(r.counts).length + r.unmatched.length >= 23, 'rows found')
+    assert.ok(r.unmatched.length <= 1, `unreadable: ${r.unmatched.join(', ')}`)
+  })
+}
+
+test('a fingerprint saved on one screen finds the window drawn 1.5x larger', async () => {
+  const first = await reader.read(FIXTURE)
+  assert.ok(!('error' in first))
+  const big = decodePng(rescaled('currency-window', 1.5))
+  const canvas = blackCanvas(big.width + 700, big.height + 400)
+  for (let y = 0; y < big.height; y++) {
+    canvas.data.set(big.data.subarray(y * big.width * 4, (y + 1) * big.width * 4), ((260 + y) * canvas.width + 410) * 4)
+  }
+  assert.equal(locateFingerprint(canvas, first.fingerprint.strip), null, 'as drawn it does not match')
+  assertReads(await reader.read(encodePng(canvas), [first.fingerprint]), EXPECTED)
 })

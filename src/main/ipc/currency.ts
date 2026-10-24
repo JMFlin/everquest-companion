@@ -3,7 +3,7 @@
 // so loot after it still counts forward (shared/itemOverrides.ts).
 
 import { app, ipcMain } from 'electron'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { IPC } from '../../shared/ipc'
 import type { CurrencyScanResult } from '../../shared/currencyScan'
@@ -61,17 +61,39 @@ function scanDir(): string {
   return dir
 }
 
-/** The header strip + column layout from the last good scan, stored as a PNG and its JSON. */
-function loadFingerprint(dir: string): Fingerprint | undefined {
-  const png = join(dir, 'fingerprint.png')
-  const json = join(dir, 'fingerprint.json')
-  if (!existsSync(png) || !existsSync(json)) return undefined
-  return { strip: decodePng(readFileSync(png)), header: JSON.parse(readFileSync(json, 'utf8')) as Fingerprint['header'] }
+/** One fingerprint per UI size (laptop, monitor, ...) so switching screens stays fast. */
+const MAX_FINGERPRINTS = 4
+
+/**
+ * The saved header strips + column layouts, newest first. Each is `fp-<strip height>.png` with
+ * its `.json`; the strip height names the UI size, so a rescan at a known size replaces its own.
+ */
+function loadFingerprints(dir: string): Fingerprint[] {
+  return savedStrips(dir)
+    .filter((f) => existsSync(join(dir, f.replace(/png$/, 'json'))))
+    .map((f) => ({
+      strip: decodePng(readFileSync(join(dir, f))),
+      header: JSON.parse(readFileSync(join(dir, f.replace(/png$/, 'json')), 'utf8')) as Fingerprint['header']
+    }))
 }
 
 function saveFingerprint(dir: string, fp: Fingerprint): void {
-  writeFileSync(join(dir, 'fingerprint.png'), encodePng(fp.strip))
-  writeFileSync(join(dir, 'fingerprint.json'), JSON.stringify(fp.header))
+  const base = join(dir, `fp-${fp.strip.height}`)
+  writeFileSync(`${base}.png`, encodePng(fp.strip))
+  writeFileSync(`${base}.json`, JSON.stringify(fp.header))
+  for (const f of savedStrips(dir).slice(MAX_FINGERPRINTS)) {
+    rmSync(join(dir, f))
+    rmSync(join(dir, f.replace(/png$/, 'json')), { force: true })
+  }
+}
+
+/** Saved strip file names, newest first. */
+function savedStrips(dir: string): string[] {
+  return readdirSync(dir)
+    .filter((f) => /^fp-\d+\.png$/.test(f))
+    .map((f) => ({ f, at: statSync(join(dir, f)).mtimeMs }))
+    .sort((a, b) => b.at - a.at)
+    .map(({ f }) => f)
 }
 
 async function scan(): Promise<CurrencyScanResult> {
@@ -99,10 +121,10 @@ async function scanOnce(cancelled: () => boolean): Promise<CurrencyScanResult> {
   // The last scan's captures stay on disk (overwritten each scan) so a misread can be inspected.
   const dir = scanDir()
   images.forEach((png, i) => writeFileSync(join(dir, `capture-${i}.png`), png))
-  const fingerprint = loadFingerprint(dir)
+  const fingerprints = loadFingerprints(dir)
   for (const png of images) {
     if (cancelled()) return { ok: false, error: 'cancelled' }
-    const r = await (await ocr).read(png, fingerprint)
+    const r = await (await ocr).read(png, fingerprints)
     if (cancelled()) return { ok: false, error: 'cancelled' }
     if (!('error' in r)) {
       saveFingerprint(dir, r.fingerprint)

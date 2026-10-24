@@ -39,7 +39,18 @@ never which mote went into an upgrade. The currency window can.
 
 - The log never names the mote used in an upgrade, so held counts drift down silently. The UI
   says to rescan after upgrading.
-- Live capture has not been tested on other UI scales, resolutions or window skins. The preview
-  step catches misreads before anything is stored.
+- **Screen and UI size.** The goldens are 9–12 px text: a laptop screenshot, a live capture with a
+  selected row, and a background PrintWindow capture. Larger UIs are covered by rescaled goldens:
+  - at 1.5x, 2x and 1.75x they must read 24/24;
+  - at 0.8x, 1.5x and 2.5x (selected-row cases) they may leave one row unreadable but never read a
+    wrong number.
+  How each step handles size:
+  - digit cells are sized by the measured row pitch, and the vote upscales shrink as pitch grows;
+  - names under 14 px are read enlarged;
+  - one fingerprint is kept per UI size (up to 4), and the newest is also searched at 0.6–2.5x
+    (~1 s), so switching screens skips the ~20 s OCR header search.
+  Text much smaller than the laptop's 9 px is not supported: the OCR header search does not find it.
+- Window skins other than the default are untested. The preview step catches misreads before
+  anything is stored.
 - `motes` is fork-only in the telemetry enums. The upstream ingest Lambda refuses batches that
   carry it.

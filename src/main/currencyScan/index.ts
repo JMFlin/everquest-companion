@@ -9,9 +9,9 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createWorker, OEM, PSM, type Line, type Word, type Worker } from 'tesseract.js'
 import { decodePng, encodePng, type Rgba } from './png'
-import { binarizeForOcr, flattenRows, crop, upscale, type Rect } from './raster'
+import { binarizeForOcr, flattenRows, crop, resize, upscale, type Rect } from './raster'
 import { currencyVocabulary, matchCurrencyName } from './vocabulary'
-import { locateFingerprint } from './locate'
+import { locateIn, MATCH, prepare } from './locate'
 
 /**
  * The header strip as an earlier capture drew it, plus the three header labels' boxes relative to
@@ -27,7 +27,8 @@ export type CurrencyScan =
   | { error: 'not-currency-window' }
 
 export interface CurrencyReader {
-  read(png: Buffer, fingerprint?: Fingerprint): Promise<CurrencyScan>
+  /** `fingerprints`: the saved ones, newest first (one per UI size the user has scanned at). */
+  read(png: Buffer, fingerprints?: readonly Fingerprint[]): Promise<CurrencyScan>
   close(): Promise<void>
 }
 
@@ -48,6 +49,9 @@ const DIGIT_VOTES: readonly { scale: number; threshold: number; flatten: boolean
   { scale: 5, threshold: 90, flatten: false },
   { scale: 4, threshold: 80, flatten: true }
 ]
+
+/** The largest row pitch DIGIT_VOTES' upscales were measured at (golden fixtures: 14.8-18.9 px). */
+const DIGIT_PITCH = 19
 
 /** Ink above this (after row flattening) is part of a glyph when counting digits. */
 const GLYPH_INK = 60
@@ -88,17 +92,17 @@ export async function createCurrencyReader(langDir: string): Promise<CurrencyRea
     Array.from({ length: WORKERS }, () => createWorker('eng', OEM.LSTM_ONLY, options))
   )
   return {
-    read: (png, fingerprint) => read(workers, decodePng(png), fingerprint),
+    read: (png, fingerprints = []) => read(workers, decodePng(png), fingerprints),
     close: async () => {
       await Promise.all(workers.map((w) => w.terminate()))
     }
   }
 }
 
-async function read(workers: Workers, img: Rgba, fingerprint?: Fingerprint): Promise<CurrencyScan> {
-  const at = fingerprint && locateFingerprint(img, fingerprint.strip)
-  if (fingerprint && at) {
-    const header = moved(fingerprint.header, at.x, at.y)
+async function read(workers: Workers, img: Rgba, fingerprints: readonly Fingerprint[]): Promise<CurrencyScan> {
+  const located = locateHeader(img, fingerprints)
+  if (located) {
+    const header = located
     const r = await readWindow(workers, img, header)
     if (Object.keys(r.counts).length > 0) return { ...r, fingerprint: fingerprintOf(img, header) }
   }
@@ -127,10 +131,14 @@ async function readWindow(
   // Quantities are read from the capture as drawn: DIGIT_VOTES upscale each cell themselves.
   const qtyX = (header.expansion.x1 + header.quantity.x0) / 2
   const qtyWidth = header.quantity.x1 + textHeight - qtyX
+  // Row pitch, not a header box, sizes the digit cells: OCR boxes can merge (a 2x UI once read
+  // all three labels as one 29 px box), the median gap over ~24 rows does not.
+  const pitch = rowPitch(names) ?? 1.57 * textHeight
+  const cellHeight = Math.min(1.5 * textHeight, 0.95 * pitch)
   const cells = names.map((n) =>
-    crop(img, { x: qtyX, y: n.yMid - 0.75 * textHeight, width: qtyWidth, height: 1.5 * textHeight })
+    crop(img, { x: qtyX, y: n.yMid - cellHeight / 2, width: qtyWidth, height: cellHeight })
   )
-  const qtys = await readQuantities(workers, cells)
+  const qtys = await readQuantities(workers, cells, pitch)
   return resolveRows(names.map((n, i) => ({ name: n.text, qty: qtys[i] })))
 }
 
@@ -165,6 +173,35 @@ function fingerprintOf(img: Rgba, header: Header): Fingerprint {
   return { strip: crop(img, strip), header: moved(header, -strip.x, -strip.y) }
 }
 
+/** Sizes tried when no saved fingerprint matches as drawn: another screen or UI scale. */
+const FINGERPRINT_SCALES = [0.6, 0.7, 0.8, 0.9, 1.15, 1.3, 1.5, 1.75, 2, 2.5]
+/** A resized fingerprint is softer than the capture it is compared with; its bar is lower. */
+const RESIZED_MATCH = 0.75
+
+/**
+ * The header by pixels: each saved fingerprint as drawn, then the newest one resized. A wrong
+ * match is harmless (no rows read → the full OCR search runs), a missed one only costs time.
+ */
+function locateHeader(img: Rgba, fingerprints: readonly Fingerprint[]): Header | null {
+  if (fingerprints.length === 0) return null
+  const capture = prepare(img)
+  for (const fp of fingerprints) {
+    const at = locateIn(capture, fp.strip, MATCH)
+    if (at) return moved(fp.header, at.x, at.y)
+  }
+  const [latest] = fingerprints
+  for (const k of FINGERPRINT_SCALES) {
+    const at = locateIn(capture, resize(latest.strip, k), RESIZED_MATCH)
+    if (at) return moved(scaled(latest.header, k), at.x, at.y)
+  }
+  return null
+}
+
+function scaled(h: Header, k: number): Header {
+  const box = (b: Box): Box => ({ x0: b.x0 * k, y0: b.y0 * k, x1: b.x1 * k, y1: b.y1 * k })
+  return { name: box(h.name), expansion: box(h.expansion), quantity: box(h.quantity) }
+}
+
 function moved(h: Header, dx: number, dy: number): Header {
   const box = (b: Box): Box => ({ x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy })
   return { name: box(h.name), expansion: box(h.expansion), quantity: box(h.quantity) }
@@ -193,31 +230,38 @@ async function readNames(workers: Workers, img: Rgba, header: Header): Promise<T
  * read alone (single-line mode: stacking cells into one image loses the "1"s of "11"), and the
  * cells are shared out across every worker.
  */
-async function readQuantities(workers: Workers, cells: readonly Rgba[]): Promise<(string | null)[]> {
+async function readQuantities(
+  workers: Workers,
+  cells: readonly Rgba[],
+  pitch: number
+): Promise<(string | null)[]> {
+  // DIGIT_VOTES' upscales are measured at row pitches up to DIGIT_PITCH; a larger UI (bigger
+  // screen or UI scale) gets proportionally less, so every vote sees the same on-image digit size.
+  const k = Math.min(1, DIGIT_PITCH / pitch)
   const params = { tessedit_pageseg_mode: PSM.SINGLE_LINE, tessedit_char_whitelist: '0123456789' }
   await Promise.all(workers.map((w) => w.setParameters(params)))
   const out: (string | null)[] = []
   let next = 0
   await Promise.all(
     workers.map(async (w) => {
-      for (let i = next++; i < cells.length; i = next++) out[i] = await readCell(w, cells[i])
+      for (let i = next++; i < cells.length; i = next++) out[i] = await readCell(w, cells[i], k)
     })
   )
   return out
 }
 
 /**
- * Reads whose digit count differs from the cell's glyph count are discarded (OCR drops a "1" of
- * "11"; the glyphs are separate blobs, so their number is known). Two surviving reads agreeing
- * settle the cell; otherwise the next setting is tried.
+ * Reads with fewer digits than the cell has glyphs are discarded (OCR drops a "1" of "11"; the
+ * glyphs are separate blobs, so their number is known; blur can merge two, never split one).
+ * Two surviving reads agreeing settle the cell; otherwise the next setting is tried.
  */
-async function readCell(worker: Worker, cell: Rgba): Promise<string | null> {
+async function readCell(worker: Worker, cell: Rgba, k: number): Promise<string | null> {
   const digits = glyphCount(cell)
   const reads: string[] = []
   for (const v of DIGIT_VOTES) {
-    const img = binarizeForOcr(v.flatten ? flattenRows(cell) : cell, v.scale, v.threshold)
+    const img = binarizeForOcr(v.flatten ? flattenRows(cell) : cell, v.scale * k, v.threshold)
     const read = (await recognizeCrop(worker, img)).map((l) => l.text.trim()).join('')
-    if (read.length === digits) reads.push(read)
+    if (read.length >= digits) reads.push(read)
     if (reads.length >= 2 && agreed(reads) !== null) break
   }
   return agreed(reads)
@@ -303,6 +347,13 @@ function mergeRows(lines: readonly TextLine[], textHeight: number): TextLine[] {
     }
   }
   return rows
+}
+
+/** Median gap between consecutive name rows, or null with fewer than two rows. */
+function rowPitch(names: readonly TextLine[]): number | null {
+  if (names.length < 2) return null
+  const gaps = names.slice(1).map((n, i) => n.yMid - names[i].yMid).sort((a, b) => a - b)
+  return gaps[gaps.length >> 1]
 }
 
 /** The number every non-empty read agrees on; null when none read or two disagree. */
