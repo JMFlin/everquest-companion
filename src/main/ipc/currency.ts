@@ -10,6 +10,8 @@ import type { CurrencyScanResult } from '../../shared/currencyScan'
 import { captureEqImages } from '../currencyScan/captureEqWindow'
 import { createCurrencyReader, findOcrLangDir, type CurrencyReader, type Fingerprint } from '../currencyScan'
 import { currencyVocabulary } from '../currencyScan/vocabulary'
+import { mergeReads, type WindowRead } from '../currencyScan/merge'
+import { logInfo } from '../errorLog'
 import { decodePng, encodePng } from '../currencyScan/png'
 import { activeCharId } from '../session'
 import { getItemOverrides, setItemOverride } from '../storeItemOverrides'
@@ -121,22 +123,46 @@ async function scanOnce(cancelled: () => boolean): Promise<CurrencyScanResult> {
   // The last scan's captures stay on disk (overwritten each scan) so a misread can be inspected.
   const dir = scanDir()
   images.forEach((png, i) => writeFileSync(join(dir, `capture-${i}.png`), png))
+  const reads = await readCaptures(await ocr, images, dir, cancelled)
+  if (reads === 'cancelled') return { ok: false, error: 'cancelled' }
+  if (reads.length === 0) return { ok: false, error: 'not-currency-window' }
+  const merged = mergeReads(reads)
+  const zeroed = currencyVocabulary().filter((n) => !(n in merged.counts))
+  // A complete read is saved at once; an unreadable row would be stated as 0, so otherwise nothing
+  // is saved and the user rescans.
+  if (merged.complete) state(merged.counts)
+  logInfo(`[currency-scan] ${merged.complete ? 'saved' : 'not saved'} from ${reads.length} capture(s)`)
+  return { ok: true, counts: merged.counts, unmatched: merged.unmatched, zeroed, saved: merged.complete }
+}
+
+/**
+ * Each capture that shows the window is another read of it: read them in order and stop at the
+ * first point the reads so far are complete on their own or merged (mergeReads).
+ */
+async function readCaptures(
+  ocr: CurrencyReader,
+  images: readonly Buffer[],
+  dir: string,
+  cancelled: () => boolean
+): Promise<WindowRead[] | 'cancelled'> {
   const fingerprints = loadFingerprints(dir)
-  for (const png of images) {
-    if (cancelled()) return { ok: false, error: 'cancelled' }
-    const r = await (await ocr).read(png, fingerprints)
-    if (cancelled()) return { ok: false, error: 'cancelled' }
-    if (!('error' in r)) {
-      saveFingerprint(dir, r.fingerprint)
-      const zeroed = currencyVocabulary().filter((n) => !(n in r.counts))
-      // A scan that read every row is saved at once; one unreadable row would be stated as 0,
-      // so then nothing is saved and the user rescans.
-      const saved = r.unmatched.length === 0
-      if (saved) state(r.counts)
-      return { ok: true, counts: r.counts, unmatched: r.unmatched, zeroed, saved }
+  const reads: WindowRead[] = []
+  for (const [i, png] of images.entries()) {
+    if (cancelled()) return 'cancelled'
+    const r = await ocr.read(png, fingerprints)
+    if (cancelled()) return 'cancelled'
+    if ('error' in r) {
+      logInfo(`[currency-scan] capture-${i}: ${r.error}`)
+      continue
     }
+    logInfo(
+      `[currency-scan] capture-${i}: ${Object.keys(r.counts).length} rows read${r.unmatched.length ? `, unreadable: ${r.unmatched.join(' / ')}` : ''}`
+    )
+    if (reads.length === 0) saveFingerprint(dir, r.fingerprint)
+    reads.push(r)
+    if (mergeReads(reads).complete) break
   }
-  return { ok: false, error: 'not-currency-window' }
+  return reads
 }
 
 /**
