@@ -22,8 +22,8 @@ off logging, the app simply has nothing to show.
 - **Leveling & AA** — XP and AA progress per character, with history.
 - **Raid targets** — which named/raid mobs you've killed and when.
 - **Buff timers** — remaining time on buffs, learned from the log *(early — still rough)*.
-- **Motes & Wind Runes** — scan the in-game currency window (a Scan button on an overlay or
-  the Motes tab) to read how many motes and runes you hold; loot after the scan keeps counting.
+- **Motes** — scan the in-game currency window (a Scan button on the Motes overlay or tab) to
+  read how many motes you hold; a full read is saved at once and loot after it keeps counting.
   The upgrade planner takes a spell's or gear piece's current rank and goal and lists which motes
   to apply, wasting the least XP. The scan is a screenshot of the game window read by local OCR —
   nothing leaves your machine.

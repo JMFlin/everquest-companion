@@ -10,10 +10,10 @@ never which mote went into an upgrade. The currency window can.
 |---|---|
 | `src/main/currencyScan/captureEqWindow.ts` | The EverQuest window as a PNG (Electron `desktopCapturer`). It runs in main because renderer media permissions are denied. |
 | `src/main/currencyScan/index.ts` `readCurrencyWindow` | PNG → `{counts, unmatched}` or `not-currency-window`. It fingerprints the `Name / Expansion / Quantity` header, then runs a name-column OCR pass and a binarized digit-only quantity pass. Names are matched against the closed vocabulary in `vocabulary.ts`. tesseract.js runs in-process with the bundled `resources/ocr/eng.traineddata`, read through a read-only cache path; nothing is fetched. PNG handling is pure TS (`png.ts`, `raster.ts`), with no native deps. |
-| `src/main/ipc/currency.ts` | `currency:scan` (capture + read) and `currency:applyScan`. Applying a scan states **every** vocabulary item as an `ItemCountOverride` dated now, and an item the window did not list is stated as 0. |
+| `src/main/ipc/currency.ts` | `currency:scan` (capture + read). A scan that reads every row is saved at once: **every** vocabulary item becomes an `ItemCountOverride` dated now, and an item the window did not list is stated as 0. A scan with an unreadable row saves nothing. `currency:getStatements` serves the statements to the overlay. |
 | `src/shared/planner/motes.ts` | The `MOTES` catalog (eqlwiki Mote_Guide values) and `planMotes`. |
-| `src/renderer/src/features/motes/` | The Motes tab: held counts from `reconcile`, scan preview and confirm, and two rank pickers. |
-| `src/renderer/src/overlay/MotesOverlay.tsx` | The `motes` overlay kind: Scan, preview and Confirm on top of the game. |
+| `src/renderer/src/features/motes/` | The Motes tab. `heldMotes` (statement + loot since − destroyed since) and `usePlanner` (rank picks, banked progress, spare copies) are shared with the overlay. Runes are scanned and saved for the Sky tracker but not shown. |
+| `src/renderer/src/overlay/MotesOverlay.tsx` | The `motes` overlay kind: Scan, held motes and the same planner on top of the game, in plain divs. |
 
 ## Why it is shaped this way
 
@@ -50,7 +50,7 @@ never which mote went into an upgrade. The currency window can.
   - one fingerprint is kept per UI size (up to 4), and the newest is also searched at 0.6–2.5x
     (~1 s), so switching screens skips the ~20 s OCR header search.
   Text much smaller than the laptop's 9 px is not supported: the OCR header search does not find it.
-- Window skins other than the default are untested. The preview step catches misreads before
-  anything is stored.
+- Window skins other than the default are untested. A scan with any unreadable row is not saved,
+  so a misread row never becomes a stored 0.
 - `motes` is fork-only in the telemetry enums. The upstream ingest Lambda refuses batches that
   carry it.
