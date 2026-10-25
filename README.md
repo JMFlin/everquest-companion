@@ -14,7 +14,8 @@ off logging, the app simply has nothing to show.
   into each attack and spell, and a timeline of the pull.
 - **Floating overlays** — small always-on-top meters you can leave on top of the game:
   damage or healing, scoped to the current fight or the whole zone. Lock one and it
-  becomes click-through.
+  becomes click-through. **Alt+Shift+0** hides every open overlay; press it again to
+  bring them back.
 - **Plane of Sky tracker** — every class's Test quests with "have / need" chips per
   item, item stats on hover, and sorting by closest-to-done.
 - **Loot + item knowledge** — a running history of what you looted, and what each item

@@ -30,7 +30,7 @@ import { CHANNEL, USER_DATA } from './channel'
 import './crashGuards'
 import { E2E } from './e2e'
 import { OWNER_TOOLS } from './ownerTools'
-import { app, BrowserWindow, protocol, session } from 'electron'
+import { app, BrowserWindow, globalShortcut, protocol, session } from 'electron'
 import { IPC } from '../shared/ipc'
 import { errorLogPath, flushErrorLogSync, logError, logInfo } from './errorLog'
 import { startQueueFlush, stopQueueFlush } from './feedback'
@@ -72,9 +72,12 @@ import {
   getMainWindow,
   hardenSession,
   hardenWebContents,
+  isOverlayOpen,
   reconcileOverlayDisplays,
-  sendToMain
+  sendToMain,
+  setOverlayOpen
 } from './windows'
+import { createOverlayToggle, OVERLAY_HOTKEY } from './overlayHotkey'
 import { watchDisplays } from './windowPlacement'
 import { OVERLAY_KINDS } from '../shared/types'
 
@@ -295,6 +298,15 @@ if (!gotSingleInstanceLock) {
     // to be in place before anything can ask this process to quit. It creates no icon under
     // EQ_E2E, where a close still closes; everything else about the app is unchanged either way.
     installCloseToTray()
+    // The one global shortcut (overlayHotkey.ts). Registration fails when another app already
+    // owns the chord; that is logged, not fatal — the TitleBar menu still toggles every overlay.
+    const toggleOverlays = createOverlayToggle({
+      openKinds: () => OVERLAY_KINDS.filter(isOverlayOpen),
+      setOpen: (kind, open) => void setOverlayOpen(kind, open)
+    })
+    if (!globalShortcut.register(OVERLAY_HOTKEY, toggleOverlays)) {
+      logError('main:overlayHotkey', new Error(`${OVERLAY_HOTKEY} is already registered by another app`))
+    }
     // `replayDone` is the LONG one on a real log (a full historical scan), so it is marked when
     // the session's promise settles — with the event count, because "6 s" means something very
     // different for 40k events than for 1.1M. `tailAttached` is marked immediately after the
@@ -437,6 +449,8 @@ if (!gotSingleInstanceLock) {
  * reading the pipe. It carried a self-reap for exactly the kill -9 case no in-process handler can
  * cover. A thread cannot outlive its process, so both the hazard and its workaround are gone.
  */
+app.on('will-quit', () => globalShortcut.unregisterAll())
+
 app.on('before-quit', () => {
   teardownStep('main:stopPresence', stopPresenceEffects)
   // …and the data-server engine, on BOTH quit events and for a stronger version of the reason the

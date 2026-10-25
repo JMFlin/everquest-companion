@@ -1394,7 +1394,8 @@ the full per-lane evidence lives in docs/agents-archive.md.
   expression its own button runs* (`useBackTarget`). The input is a
   BrowserWindow `app-command` listener on the MAIN window only, gated on
   focus — no globalShortcut, no mouse hook, nothing while EverQuest is
-  foreground; `browser-forward` is deliberately unhandled. (Chromium handles
+  foreground (the ONE global shortcut is the Alt+Shift+0 overlay hide/restore,
+  `overlayHotkey.ts`, an owner decision); `browser-forward` is deliberately unhandled. (Chromium handles
   the physical X-button in the browser process — a DOM listener would not
   work.) Full story: docs/agents-archive.md.
 - **A VIEW UNMOUNTS ON EVERY TAB SWITCH, so `useState` in one is a promise you
