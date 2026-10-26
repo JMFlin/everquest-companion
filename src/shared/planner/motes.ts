@@ -16,14 +16,14 @@
 //   condensing only ever helps gear by raising the cap. Off unless the gear selection opts in.
 //
 // ALLOCATION (one shared pool)
-// 1. Gear first. Exact DP over (cumulative XP, condensed carry) tier by tier (carry stays 0 when
-//    condensing is off), applying in
-//    ascending itemCap order — a lower-cap mote is only harder to place later, so this order never
-//    strands a mote another order could use. Lexicographic objective: reach `to` (else most XP),
-//    then least spell value consumed, then least overshoot, then fewest condenses, then least
-//    spare-copy XP merged. Spare copies are a final DP stage: they have no cap and cost no mote,
-//    and merging one first would only raise the tier past some mote's cap. Counts are
-//    first clamped to what can ever be used (`usefulBounds`), which keeps hoards of hundreds fast.
+// 1. Gear first. Exact DP over (pool, the piece's XP, one levelling spare's XP) tier by tier,
+//    applying in ascending itemCap order on each item — a lower-cap mote is only harder to place
+//    later, so this order never strands a mote another order could use. A spare copy may take
+//    motes before it merges (it opens the low-cap windows again), then every spare merges at the
+//    end, where it has no cap to pass. Lexicographic objective: reach `to` (else most XP), then
+//    least spell value consumed, then least overshoot, then fewest condenses, then least
+//    spare-copy XP merged. Counts are first clamped to what can ever be used (`usefulBounds`).
+//    The state grows with every levelling spare, so spares level one at a time (`planGear`).
 // 2. Spell takes what remains: largest-first greedy within the need (powers of two, so the fill is
 //    exact whenever exact is possible), then the smallest single mote that completes the goal
 //    without passing 1023. Never condenses (neutral for spells).
@@ -74,6 +74,8 @@ export const SPARE_MAX_TIER = ITEM_MAX_TIER - 1
 export type Step =
   | { kind: 'condense'; mote: MoteName; pairs: number; into: MoteName }
   | { kind: 'apply'; mote: MoteName; count: number; after: ItemUpgradeState }
+  /** Motes onto spare copy `spare` (index into the gear selection's spares, at tier `from`) before it merges. */
+  | { kind: 'level'; spare: number; from: number; mote: MoteName; count: number; after: ItemUpgradeState }
   | { kind: 'merge'; tier: number; count: number; after: ItemUpgradeState }
 
 export interface SectionPlan {
@@ -140,20 +142,19 @@ function startXp(sel: Selection): number {
   return cumXp(sel.from) + (sel.fraction ?? 0)
 }
 
+type Op = { kind: 'apply'; mote: number; item: number; count: number } | { kind: 'merge'; xp: number }
+
 interface DpNode {
   value: number
-  pairs: number
   /** Spare-copy XP merged so far (the last tie-break: keep copies when motes do the same job). */
   spareXp: number
-  prev: DpNode | null
-  applied: number
-  condensed: number
+  /** The operation that led here; null at the start. */
+  from: { prev: DpNode; op: Op } | null
 }
 
-/** Strictly better on (value, condense pairs, spare XP), in that order. */
+/** Strictly better on (value, spare XP), in that order. */
 function cheaper(a: DpNode, b: DpNode): boolean {
   if (a.value !== b.value) return a.value < b.value
-  if (a.pairs !== b.pairs) return a.pairs < b.pairs
   return a.spareXp < b.spareXp
 }
 
@@ -164,127 +165,208 @@ function keepBetter(layer: Map<number, DpNode>, key: number, cand: DpNode): void
   layer.set(key, cand)
 }
 
+function extend(node: DpNode, op: Op, value: number, spareXp: number): DpNode {
+  return { value: node.value + value, spareXp: node.spareXp + spareXp, from: { prev: node, op } }
+}
+
 /**
  * Per tier: how many held motes can ever be used, and how many pairs into the next tier can.
- * A tier applies at most min(ceil(capLimit / itemXp), floor(1023 / itemXp)) times (XP only grows,
- * from 0 at best). Under the fewest-condenses tie-break an optimum spends held motes before
- * condensed ones and condenses nothing it then leaves unused, so tier n+1 draws at most
- * max(0, useful(n+1) - held(n+1)) pairs from tier n. Clamping to these bounds changes no optimum.
+ * One item applies a tier at most min(ceil(capLimit / itemXp), floor(1023 / itemXp)) times (XP
+ * only grows, from 0 at best), so `items` of them at most that many times over. An optimum
+ * spends held motes before condensed ones, so tier n+1 draws at most max(0, useful(n+1) -
+ * held(n+1)) pairs from tier n. Clamping to these bounds changes no optimum.
  */
-function usefulBounds(counts: number[], condense: boolean): { held: number[]; pairs: number[] } {
+function usefulBounds(counts: number[], condense: boolean, items: number): { held: number[]; pairs: number[] } {
   const useful: number[] = MOTES.map(() => 0)
   const pairs: number[] = MOTES.map(() => 0)
   for (let i = MOTES.length - 1; i >= 0; i--) {
     const m = MOTES[i]
-    const applications = Math.min(Math.ceil(cumXp(m.itemCap + 1) / m.itemXp), Math.floor(MAX_XP / m.itemXp))
+    const applications = items * Math.min(Math.ceil(cumXp(m.itemCap + 1) / m.itemXp), Math.floor(MAX_XP / m.itemXp))
     pairs[i] = condense && i < CONDENSE_MAX_INDEX ? Math.max(0, useful[i + 1] - counts[i + 1]) : 0
     useful[i] = applications + 2 * pairs[i]
   }
   return { held: counts.map((c, i) => Math.min(c, useful[i])), pairs }
 }
 
-/** Optimal gear plan over `counts` (mutated to what remains). */
-function planGear(counts: number[], sel: GearSelection): SectionPlan {
-  const start = startXp(sel)
-  const target = cumXp(sel.to)
-  const carryKey = (carry: number, xp: number): number => carry * (MAX_XP + 1) + xp
-  const bounds = usefulBounds(counts, sel.condense ?? false)
+/** The fewest condenses that cover applying `used` per tier out of `counts`, from the top tier down. */
+function fewestPairs(counts: number[], used: number[]): number[] {
+  const pairs: number[] = MOTES.map(() => 0)
+  for (let i = MOTES.length - 1; i > 0; i--) pairs[i - 1] = Math.max(0, used[i] + 2 * pairs[i] - counts[i])
+  return pairs
+}
 
-  let frontier = new Map<number, DpNode>([
-    [carryKey(0, start), { value: 0, pairs: 0, spareXp: 0, prev: null, applied: 0, condensed: 0 }]
+interface GearDp {
+  /** Motes applied per tier to the piece and to the levelled spare. */
+  piece: number[]
+  spare: number[]
+  /** Merge XP of each spare merged. */
+  merged: number[]
+}
+
+// DP keys pack (pool, piece XP, levelled spare XP); both XPs stay within 0..1023.
+const XP_SPAN = MAX_XP + 1
+const pack = (pool: number, piece: number, spare: number): number => (pool * XP_SPAN + piece) * XP_SPAN + spare
+const unpack = (key: number): [number, number, number] => [
+  Math.floor(key / XP_SPAN / XP_SPAN),
+  Math.floor(key / XP_SPAN) % XP_SPAN,
+  key % XP_SPAN
+]
+
+interface DpItem {
+  /** Index into the packed XPs: 0 the piece, 1 the levelled spare. */
+  item: 0 | 1
+  /** Highest XP the item may reach. */
+  limit: number
+  /** No application starts at or past this XP. */
+  below: number
+}
+
+/** How many of `mote` (cap limit `capLimit`) the item can still take from `xp`. */
+function room(it: DpItem, xp: number, itemXp: number, capLimit: number): number {
+  const stop = Math.min(capLimit, it.below)
+  return xp >= stop ? 0 : Math.min(Math.ceil((stop - xp) / itemXp), Math.floor((it.limit - xp) / itemXp))
+}
+
+/**
+ * The exact DP over (pool, the piece's XP, the levelled spare's XP), tier by tier. Spare `level`
+ * (if any) takes motes alongside the piece and stays below +10, which merges for nothing; the
+ * other spares sit at their tiers. Every spare may merge at the end. The piece takes no mote once
+ * at the target: that only adds value and overshoot. Whatever a tier leaves condenses into the
+ * next tier's pool: a condensed mote nobody applies costs nothing, and planGear keeps only the
+ * condenses the applied motes need. Pools are clamped to what the rest of the tier can take.
+ */
+function gearDp(counts: number[], sel: GearSelection, spares: number[], level: number | null): GearDp {
+  const target = cumXp(sel.to)
+  const bounds = usefulBounds(counts, sel.condense ?? false, level === null ? 1 : 2)
+  const items: DpItem[] = [
+    { item: 0, limit: MAX_XP, below: target },
+    ...(level === null ? [] : [{ item: 1 as const, limit: MAX_XP - 1, below: MAX_XP }])
+  ]
+
+  let layer = new Map<number, DpNode>([
+    [pack(0, startXp(sel), level === null ? 0 : cumXp(spares[level])), { value: 0, spareXp: 0, from: null }]
   ])
   MOTES.forEach((mote, i) => {
-    const next = new Map<number, DpNode>()
     const capLimit = cumXp(mote.itemCap + 1)
-    for (const [key, node] of frontier) {
-      const carry = Math.floor(key / (MAX_XP + 1))
-      const xp = key % (MAX_XP + 1)
-      const avail = bounds.held[i] + carry
-      for (let u = 0; u <= avail; u++) {
-        // The u-th application happens at xp + (u-1)*itemXp and must land within the cap and 1023.
-        if (u > 0 && (xp + (u - 1) * mote.itemXp >= capLimit || xp + u * mote.itemXp > MAX_XP)) break
-        const xpAfter = xp + u * mote.itemXp
-        const maxPairs = Math.min(Math.floor((avail - u) / 2), bounds.pairs[i])
-        for (let p = 0; p <= maxPairs; p++) {
-          keepBetter(next, carryKey(p, xpAfter), {
-            value: node.value + u * mote.spellXp,
-            pairs: node.pairs + p,
-            spareXp: 0,
-            prev: node,
-            applied: u,
-            condensed: p
-          })
+    const condensing = 2 * bounds.pairs[i]
+    let next = new Map<number, DpNode>()
+    for (const [key, node] of layer) next.set(key + pack(bounds.held[i], 0, 0), node)
+    layer = next
+    // Each item takes this tier in turn, from the one shared pool.
+    items.forEach((it, n) => {
+      next = new Map()
+      for (const [key, node] of layer) {
+        const [held, ...xs] = unpack(key)
+        const xp = xs[it.item]
+        const later = items.slice(n + 1).reduce((s, o) => s + room(o, xs[o.item], mote.itemXp, capLimit), condensing)
+        const most = Math.min(held, room(it, xp, mote.itemXp, capLimit))
+        for (let u = 0; u <= most; u++) {
+          const pool = Math.min(held - u, later)
+          const after = it.item === 0 ? pack(pool, xp + u * mote.itemXp, xs[1]) : pack(pool, xs[0], xp + u * mote.itemXp)
+          const op: Op = { kind: 'apply', mote: i, item: it.item, count: u }
+          keepBetter(next, after, u === 0 ? node : extend(node, op, u * mote.spellXp, 0))
         }
       }
+      layer = next
+    })
+    next = new Map()
+    for (const [key, node] of layer) {
+      const [pool, piece, spare] = unpack(key)
+      keepBetter(next, pack(Math.min(Math.floor(pool / 2), bounds.pairs[i]), piece, spare), node)
     }
-    frontier = next
+    layer = next
   })
 
-  // After Infinite (never condensed) every key has carry 0, so the key IS the XP. Spare copies
-  // follow, one stage per tier held, in any amount that stays within 1023.
-  const spares = sel.spares ?? []
-  const spareTiers = [...new Set(spares)].sort((a, b) => a - b)
-  for (const tier of spareTiers) {
-    const have = spares.filter((t) => t === tier).length
-    const next = new Map<number, DpNode>()
-    for (const [xp, node] of frontier) {
-      for (let u = 0; u <= have && xp + u * mergeXp(tier) <= MAX_XP; u++) {
-        keepBetter(next, xp + u * mergeXp(tier), {
-          value: node.value,
-          pairs: node.pairs,
-          spareXp: node.spareXp + u * mergeXp(tier),
-          prev: node,
-          applied: u,
-          condensed: 0
-        })
-      }
-    }
-    frontier = next
+  // After Infinite (never condensed) the pool is 0. Each spare then merges in for its tier's XP or
+  // stays a copy; merging any earlier would only raise the piece past caps. From here keys are the
+  // piece's XP alone.
+  let merged = new Map<number, DpNode>()
+  for (const [key, node] of layer) {
+    const [, piece, spare] = unpack(key)
+    keepBetter(merged, piece, node)
+    const gain = level === null ? 0 : mergeXp(stateAt(spare).full)
+    if (gain > 0 && piece + gain <= MAX_XP) keepBetter(merged, piece + gain, extend(node, { kind: 'merge', xp: gain }, 0, gain))
   }
-  const [, best] = [...frontier].reduce((a, b) => {
+  spares.forEach((tier, j) => {
+    if (j === level) return
+    const next = new Map<number, DpNode>()
+    for (const [piece, node] of merged) {
+      keepBetter(next, piece, node)
+      const gain = mergeXp(tier)
+      if (piece + gain <= MAX_XP) keepBetter(next, piece + gain, extend(node, { kind: 'merge', xp: gain }, 0, gain))
+    }
+    merged = next
+  })
+  const [, best] = [...merged].reduce((a, b) => {
     const better =
       Math.min(b[0], target) - Math.min(a[0], target) ||
       a[1].value - b[1].value ||
       Math.max(0, a[0] - target) - Math.max(0, b[0] - target) ||
-      a[1].pairs - b[1].pairs ||
       a[1].spareXp - b[1].spareXp
     return better > 0 ? b : a
   })
 
-  const merged: number[] = spareTiers.map(() => 0)
-  let node = best
-  // Every spare stage sits after the ten mote stages, so each has a predecessor.
-  for (let j = spareTiers.length - 1; j >= 0 && node.prev; j--) {
-    merged[j] = node.applied
-    node = node.prev
+  const dp: GearDp = { piece: MOTES.map(() => 0), spare: MOTES.map(() => 0), merged: [] }
+  for (let n = best; n.from; n = n.from.prev) {
+    const op = n.from.op
+    if (op.kind === 'apply') (op.item === 0 ? dp.piece : dp.spare)[op.mote] = op.count
+    else dp.merged.push(op.xp)
   }
-  const applied: number[] = MOTES.map(() => 0)
-  const condensed: number[] = MOTES.map(() => 0)
-  for (let i = MOTES.length - 1; node.prev; i--) {
-    applied[i] = node.applied
-    condensed[i] = node.condensed
-    node = node.prev
+  return dp
+}
+
+/** Applies `used` per tier out of `counts` (mutated), after the fewest condenses that cover it. */
+function spend(steps: Step[], counts: number[], used: number[]): void {
+  const pairs = fewestPairs(counts, used)
+  MOTES.forEach((mote, i) => {
+    if (pairs[i] > 0) steps.push({ kind: 'condense', mote: mote.name, pairs: pairs[i], into: MOTES[i + 1].name })
+    counts[i] += (i > 0 ? pairs[i - 1] : 0) - 2 * pairs[i] - used[i]
+  })
+}
+
+/** Spare `j`'s levelling steps from tier `from`; returns the tier it reaches. */
+function levelSteps(steps: Step[], j: number, from: number, used: number[]): number {
+  let xp = cumXp(from)
+  MOTES.forEach((mote, i) => {
+    if (used[i] === 0) return
+    xp += used[i] * mote.itemXp
+    steps.push({ kind: 'level', spare: j, from, mote: mote.name, count: used[i], after: stateAt(xp) })
+  })
+  return stateAt(xp).full
+}
+
+/**
+ * Gear plan over `counts` (mutated to what remains). The DP's state grows with every spare it
+ * levels, so spares are levelled one at a time, lowest tier first (the most low-cap windows):
+ * each round is the exact DP with that one spare levelling, and keeps only its levelling (plus the
+ * condenses it needs); the last round's whole plan stands. Exact with at most one spare.
+ */
+function planGear(counts: number[], sel: GearSelection): SectionPlan {
+  const tiers = [...(sel.spares ?? [])]
+  const order = tiers.map((_, j) => j).sort((a, b) => tiers[a] - tiers[b])
+  const last = order.length > 0 ? order[order.length - 1] : null
+  const steps: Step[] = []
+  for (const j of order.slice(0, -1)) {
+    const used = gearDp(counts, sel, tiers, j).spare
+    spend(steps, counts, used)
+    tiers[j] = levelSteps(steps, j, tiers[j], used)
   }
 
-  const steps: Step[] = []
+  const dp = gearDp(counts, sel, tiers, last)
+  spend(steps, counts, dp.piece.map((n, i) => n + dp.spare[i]))
+  if (last !== null) levelSteps(steps, last, tiers[last], dp.spare)
+  let xp = startXp(sel)
   MOTES.forEach((mote, i) => {
-    if (condensed[i] > 0) {
-      steps.push({ kind: 'condense', mote: mote.name, pairs: condensed[i], into: MOTES[i + 1].name })
-    }
+    if (dp.piece[i] === 0) return
+    xp += dp.piece[i] * mote.itemXp
+    steps.push({ kind: 'apply', mote: mote.name, count: dp.piece[i], after: stateAt(xp) })
   })
-  let xp = start
-  MOTES.forEach((mote, i) => {
-    counts[i] += (i > 0 ? condensed[i - 1] : 0) - applied[i] - 2 * condensed[i]
-    if (applied[i] === 0) return
-    xp += applied[i] * mote.itemXp
-    steps.push({ kind: 'apply', mote: mote.name, count: applied[i], after: stateAt(xp) })
-  })
-  spareTiers.forEach((tier, j) => {
-    if (merged[j] === 0) return
-    xp += merged[j] * mergeXp(tier)
-    steps.push({ kind: 'merge', tier, count: merged[j], after: stateAt(xp) })
-  })
-  return section(sel, steps, xp, target)
+  for (const gain of [...new Set(dp.merged)].sort((a, b) => a - b)) {
+    const count = dp.merged.filter((g) => g === gain).length
+    xp += count * gain
+    steps.push({ kind: 'merge', tier: Math.log2(gain), count, after: stateAt(xp) })
+  }
+  return section(sel, steps, xp, cumXp(sel.to))
 }
 
 /** Spell plan over `counts` (mutated to what remains). */

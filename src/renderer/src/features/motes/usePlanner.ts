@@ -96,7 +96,12 @@ export function shortMote(name: MoteName): string {
 
 export function stepText(s: Step): string {
   if (s.kind === 'condense') return `Condense ${s.pairs * 2}× ${shortMote(s.mote)} → ${s.pairs}× ${shortMote(s.into)}`
-  const what = s.kind === 'merge' ? `Merge ${s.count}× spare +${s.tier} copy` : `Apply ${s.count}× ${shortMote(s.mote)}`
+  const what =
+    s.kind === 'merge'
+      ? `Merge ${s.count}× spare +${s.tier} copy`
+      : s.kind === 'level'
+        ? `Spare ${s.spare + 1} (+${s.from}): apply ${s.count}× ${shortMote(s.mote)}`
+        : `Apply ${s.count}× ${shortMote(s.mote)}`
   const progress = s.after.full < 10 ? ` (${s.after.fraction}/${2 ** s.after.full})` : ''
   return `${what} → rank ${s.after.full}${progress}`
 }

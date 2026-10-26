@@ -30,7 +30,9 @@ never which mote went into an upgrade. The currency window can.
 - **Gear takes spare copies and banked progress.** The gear picker also accepts XP already banked
   at the current tier (default 0) and spare copies of the same item. A +t copy merges in for 2^t
   XP (eqlwiki Gear Merge Experience) with no tier cap, so copies are merged after every capped
-  mote. They cost no mote, so they are used first.
+  mote. They cost no mote, so they are used first. A spare can also take motes before it merges:
+  levelling a +0 copy reopens the low-cap windows the piece has outgrown. One spare is planned
+  exactly with the piece; with several, they level one at a time, lowest tier first.
 - **Game rules the owner confirmed:**
   - XP past rank or tier 10 is impossible.
   - Two motes of tier n condense into one of tier n+1.

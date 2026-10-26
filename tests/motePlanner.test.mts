@@ -8,7 +8,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MOTES, planMotes, type MoteName, type SectionPlan } from '../src/shared/planner/motes'
+import { MOTES, planMotes, type MoteName, type SectionPlan, type Step } from '../src/shared/planner/motes'
 
 const MAX_XP = 1023
 const NAMES = MOTES.map((m) => m.name)
@@ -34,6 +34,21 @@ const OWNER: Partial<Record<MoteName, number>> = {
   'Mote of Infinite Potential': 1
 }
 
+/** Executes a spare-levelling step against `counts` and `spareXp` (both mutated); returns value spent. */
+function replayLevel(counts: number[], spareXp: number[], step: Extract<Step, { kind: 'level' }>, origin: number): number {
+  assert.equal(step.from, origin)
+  const i = idx(step.mote)
+  for (let n = 0; n < step.count; n++) {
+    assert.ok(counts[i] > 0, `level ${step.mote} overdraws`)
+    assert.ok(tierOf(spareXp[step.spare]) <= MOTES[i].itemCap, `${step.mote} applied to a spare above cap`)
+    counts[i]--
+    spareXp[step.spare] += MOTES[i].itemXp
+    assert.ok(tierOf(spareXp[step.spare]) <= 9, 'spare levelled to +10')
+  }
+  assert.deepEqual(step.after, stateOf(spareXp[step.spare]))
+  return step.count * MOTES[i].spellXp
+}
+
 /** Executes a section's steps against `counts` (mutated); returns final XP and value spent. */
 function replay(
   counts: number[],
@@ -44,7 +59,14 @@ function replay(
   let xp = cum(plan.from) + (opts.fraction ?? 0)
   let value = 0
   const spares = [...(opts.spares ?? [])]
+  const origin = [...spares]
+  const spareXp = spares.map(cum)
   for (const step of plan.steps) {
+    if (step.kind === 'level') {
+      value += replayLevel(counts, spareXp, step, origin[step.spare])
+      spares[step.spare] = tierOf(spareXp[step.spare])
+      continue
+    }
     if (step.kind === 'merge') {
       assert.equal(kind, 'gear', 'spells never merge')
       for (let n = 0; n < step.count; n++) {
@@ -236,7 +258,7 @@ function bruteForceGear(
   counts: number[],
   from: number,
   to: number,
-  opts: { fraction?: number; spares?: number[]; condense?: boolean } = {}
+  opts: { fraction?: number; spares?: number[]; condense?: boolean; level?: boolean } = {}
 ): [number, number, number] {
   const target = cum(to)
   let best: [number, number, number] = [-1, 0, 0]
@@ -247,11 +269,17 @@ function bruteForceGear(
     seen.add(key)
     const score: [number, number, number] = [Math.min(xp, target), -value, -Math.max(0, xp - target)]
     if (lexGreater(score, best)) best = score
-    sp.forEach((t, j) => {
-      if (xp + 2 ** t <= MAX_XP) visit(c, xp + 2 ** t, value, sp.filter((_, k) => k !== j))
+    sp.forEach((s, j) => {
+      if (xp + 2 ** tierOf(s) <= MAX_XP) visit(c, xp + 2 ** tierOf(s), value, sp.filter((_, k) => k !== j))
     })
     for (let i = 0; i < c.length; i++) {
       if (c[i] === 0) continue
+      sp.forEach((s, j) => {
+        if (!opts.level || tierOf(s) > MOTES[i].itemCap || tierOf(s + MOTES[i].itemXp) > 9) return
+        const n = [...c]
+        n[i]--
+        visit(n, xp, value + MOTES[i].spellXp, sp.map((v, k) => (k === j ? v + MOTES[i].itemXp : v)).sort((a, b) => a - b))
+      })
       if (tierOf(xp) <= MOTES[i].itemCap && xp + MOTES[i].itemXp <= MAX_XP) {
         const n = [...c]
         n[i]--
@@ -265,7 +293,7 @@ function bruteForceGear(
       }
     }
   }
-  visit(counts, cum(from) + (opts.fraction ?? 0), 0, [...(opts.spares ?? [])].sort((a, b) => a - b))
+  visit(counts, cum(from) + (opts.fraction ?? 0), 0, (opts.spares ?? []).map(cum).sort((a, b) => a - b))
   return best
 }
 
@@ -331,7 +359,7 @@ test('fraction and spare tiers are validated', () => {
   assert.throws(() => planMotes({}, { gear: { from: 4, to: 5, spares: [10] } }), /spares/)
 })
 
-test('gear DP with spare copies and banked progress matches exhaustive search', () => {
+test('gear with spare copies and banked progress never does worse than merging them as they are', () => {
   let seed = 777
   const rand = (n: number): number => {
     seed = (seed * 1103515245 + 12345) % 2 ** 31
@@ -348,9 +376,9 @@ test('gear DP with spare copies and banked progress matches exhaustive search', 
     const plan = planMotes(held, { gear: { from, to, fraction, spares, condense } })
     const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', { fraction, spares, condense })
     const target = cum(to)
-    assert.deepEqual(
-      [Math.min(got.xp, target), -got.value, -Math.max(0, got.xp - target)],
-      bruteForceGear(toCounts(held), from, to, { fraction, spares, condense }),
+    const score = [Math.min(got.xp, target), -got.value, -Math.max(0, got.xp - target)]
+    assert.ok(
+      !lexGreater(bruteForceGear(toCounts(held), from, to, { fraction, spares, condense }), score),
       `trial ${trial}: ${JSON.stringify(held)} ${from}(+${fraction})->${to} spares ${JSON.stringify(spares)} condense ${condense}`
     )
   }
@@ -379,4 +407,39 @@ test('spell banked progress counts: rank 4 at 5/16 needs 11 more XP to reach ran
       ['Mote of Potential', 1]
     ]
   )
+})
+
+test('gear DP levelling one spare matches exhaustive search', () => {
+  let seed = 4242
+  const rand = (n: number): number => {
+    seed = (seed * 1103515245 + 12345) % 2 ** 31
+    return seed % n
+  }
+  for (let trial = 0; trial < 150; trial++) {
+    const held: Partial<Record<MoteName, number>> = {}
+    for (let i = 0; i < 6; i++) if (rand(3)) held[NAMES[i]] = rand(4)
+    const [from, fraction, spares, condense] = [rand(6), 0, [rand(4)], trial % 2 === 0]
+    const to = from + 1 + rand(3)
+    const plan = planMotes(held, { gear: { from, to, fraction, spares, condense } })
+    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', { fraction, spares, condense })
+    assert.deepEqual(
+      [Math.min(got.xp, cum(to)), -got.value, -Math.max(0, got.xp - cum(to))],
+      bruteForceGear(toCounts(held), from, to, { fraction, spares, condense, level: true }),
+      `trial ${trial}: ${JSON.stringify(held)} ${from}->${to} spare +${spares[0]} condense ${condense}`
+    )
+  }
+})
+
+test("owner's +5 -> +8 with a spare +0 levels the spare on low motes and keeps Greaters for the piece", () => {
+  const gear = planMotes(OWNER, { gear: { from: 5, to: 8, spares: [0] } }).gear as SectionPlan
+  replay(toCounts(OWNER), gear, 'gear', { spares: [0] })
+  const has = (kind: Step['kind'], mote: MoteName): boolean => gear.steps.some((s) => s.kind === kind && 'mote' in s && s.mote === mote)
+  assert.ok(has('level', 'Mote of Infinitesimal Potential') && has('apply', 'Mote of Greater Potential'))
+})
+
+test('several spares level one at a time and stay fast', () => {
+  const t0 = performance.now()
+  const plan = planMotes(OWNER, { gear: { from: 0, to: 10, spares: [0, 0, 3, 5], condense: true } })
+  assert.ok(performance.now() - t0 < 2000)
+  replay(toCounts(OWNER), plan.gear as SectionPlan, 'gear', { spares: [0, 0, 3, 5], condense: true })
 })
