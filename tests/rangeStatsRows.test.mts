@@ -367,7 +367,7 @@ test('the class combo is quoted verbatim, or admitted as unknown', () => {
 
 test('witnessed kills and AA are context, and vanish when there are none', () => {
   assert.equal(witnessedText(stats({ killsWitnessed: 0 })), null)
-  assert.equal(witnessedText(stats({ killsWitnessed: 1204 })), '1,204 kills by others seen')
+  assert.equal(witnessedText(stats({ killsWitnessed: 1204 })), `${(1204).toLocaleString()} kills by others seen`)
   assert.equal(aaText(stats({ aaGained: 0, aaGainEvents: 0 })), null)
   assert.equal(aaText(stats({ aaGained: 7, aaGainEvents: 5 })), '+7 AA')
   // The caption names the source in one phrase; the respec reservation lives in the doc

@@ -359,7 +359,7 @@ test('the line reads as a sentence and states the verdicts last', () => {
   assert.ok(block !== null)
   const line = formatPerfEngine(block)
   assert.match(line, /^live up 412s/)
-  assert.match(line, /139,864 events/)
+  assert.ok(line.includes(`${(139_864).toLocaleString()} events`), line)
   assert.match(line, /1400ms behind/)
   assert.match(line, /clock host/)
   assert.match(line, /skew 412ms/)
