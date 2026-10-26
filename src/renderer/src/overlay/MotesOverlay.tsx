@@ -3,7 +3,7 @@
 // features/motes modules; this file only draws them in plain divs. A locked overlay is
 // click-through, so its buttons only work unlocked.
 
-import type { CSSProperties, JSX } from 'react'
+import type { CSSProperties, JSX, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CurrencyScanResult } from '@shared/currencyScan'
 import type { ItemCountOverride } from '@shared/itemOverrides'
@@ -76,6 +76,20 @@ function Steps({ plan }: { plan: SectionPlan }): JSX.Element {
   )
 }
 
+function Check(props: { checked: boolean; onChange: (c: boolean) => void; testId: string; children: ReactNode }): JSX.Element {
+  return (
+    <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      <input
+        type="checkbox"
+        checked={props.checked}
+        onChange={(e) => props.onChange(e.target.checked)}
+        data-testid={props.testId}
+      />
+      {props.children}
+    </label>
+  )
+}
+
 /** "Progress at +N: [ x ] / 2^N" — XP already banked toward the next rank or tier. */
 function ProgressPlain(props: { from: number; fraction: number; onFraction: (f: number) => void }): JSX.Element {
   const step = 2 ** props.from
@@ -101,21 +115,10 @@ function GearExtrasPlain(props: {
   onFraction: (f: number) => void
   spares: number[]
   onSpares: (s: number[]) => void
-  condense: boolean
-  onCondense: (c: boolean) => void
 }): JSX.Element {
   return (
     <div style={{ paddingLeft: 38 }}>
       <ProgressPlain from={props.from} fraction={props.fraction} onFraction={props.onFraction} />
-      <label style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
-        <input
-          type="checkbox"
-          checked={props.condense}
-          onChange={(e) => props.onCondense(e.target.checked)}
-          data-testid="motes-overlay-condense"
-        />
-        Condense motes
-      </label>
       <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
         <span>Spare copy:</span>
         {SPARE_TIERS.map((t) => (
@@ -192,17 +195,16 @@ export default function MotesOverlay(): JSX.Element {
           )}
           <span style={{ color: DIM }}>{status}</span>
         </div>
-        <label style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 4 }}>
-          <input
-            type="checkbox"
-            checked={auto.enabled}
-            onChange={(e) => auto.setEnabled(e.target.checked)}
-            data-testid="motes-overlay-auto-rescan"
-          />
-          Auto rescan
-          {auto.countdown && <span style={{ color: DIM }}>· {auto.countdown}</span>}
-          {auto.note && <span style={{ color: '#8fd18f' }}>· {auto.note}</span>}
-        </label>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 4 }}>
+          <Check checked={auto.enabled} onChange={auto.setEnabled} testId="motes-overlay-auto-rescan">
+            Auto rescan
+            {auto.countdown && <span style={{ color: DIM }}>· {auto.countdown}</span>}
+            {auto.note && <span style={{ color: '#8fd18f' }}>· {auto.note}</span>}
+          </Check>
+          <Check checked={p.condense} onChange={p.setCondense} testId="motes-overlay-condense">
+            Condense motes
+          </Check>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: 12, margin: '6px 0' }}>
           {MOTES.map((m) => (
             <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -226,8 +228,6 @@ export default function MotesOverlay(): JSX.Element {
             onFraction={p.setFraction}
             spares={p.spares}
             onSpares={p.setSpares}
-            condense={p.condense}
-            onCondense={p.setCondense}
           />
         )}
         {p.plan.gear && <Steps plan={p.plan.gear} />}

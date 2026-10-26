@@ -1,10 +1,9 @@
 // GearExtras — what the gear plan knows beyond from → to: XP already banked at the current tier
-// (the in-game "x / y", 0 unless set), spare copies of the same item to merge in, and whether
-// the plan may condense motes. ProgressField
+// (the in-game "x / y", 0 unless set) and spare copies of the same item to merge in. ProgressField
 // is the banked-XP box alone, which the spell row uses too.
 
 import type { JSX } from 'react'
-import { Box, Checkbox, Chip, FormControlLabel, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
+import { Box, Chip, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
 import { SPARE_MAX_TIER } from '@shared/planner/motes'
 
 const SPARE_TIERS = Array.from({ length: SPARE_MAX_TIER + 1 }, (_, t) => t)
@@ -39,24 +38,11 @@ export function GearExtras(props: {
   onFraction: (fraction: number) => void
   spares: readonly number[]
   onSpares: (spares: number[]) => void
-  condense: boolean
-  onCondense: (condense: boolean) => void
 }): JSX.Element {
   const { from, fraction, spares } = props
   return (
     <Box sx={{ pl: 9 }}>
       <ProgressField from={from} fraction={fraction} onFraction={props.onFraction} testId="motes-gear-fraction" />
-      <FormControlLabel
-        control={
-          <Checkbox
-            size="small"
-            checked={props.condense}
-            onChange={(e) => props.onCondense(e.target.checked)}
-            data-testid="motes-gear-condense"
-          />
-        }
-        label="Condense motes to unlock higher caps"
-      />
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
         <Typography variant="body2">Add a spare copy:</Typography>
         <ToggleButtonGroup size="small" data-testid="motes-gear-spares">

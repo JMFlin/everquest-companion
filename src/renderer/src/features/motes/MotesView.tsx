@@ -22,13 +22,13 @@ import {
   Typography
 } from '@mui/material'
 import type { CurrencyScanResult } from '@shared/currencyScan'
-import { MOTES, type MoteName, type SectionPlan } from '@shared/planner/motes'
+import { MOTES, type SectionPlan } from '@shared/planner/motes'
 import { useProgress } from '../posky/useProgress'
 import { ScanPreview } from './ScanPreview'
 import { GearExtras, ProgressField } from './GearExtras'
 import { heldMotes } from './heldMotes'
 import { useAutoRescan } from './useAutoRescan'
-import { RANKS, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type RankPick } from './usePlanner'
+import { RANKS, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type Planner, type RankPick } from './usePlanner'
 
 function RankPicker(props: { label: string; pick: RankPick; onPick: (n: number) => void }): JSX.Element {
   return (
@@ -64,8 +64,7 @@ function PlanSteps({ plan }: { plan: SectionPlan }): JSX.Element {
   )
 }
 
-function PlannerPanel({ held }: { held: Record<MoteName, number> }): JSX.Element {
-  const p = usePlanner(held)
+function PlannerPanel({ p }: { p: Planner }): JSX.Element {
   return (
     <Paper sx={{ p: 2 }}>
       <Typography variant="h6" sx={{ mb: 1 }}>
@@ -92,8 +91,6 @@ function PlannerPanel({ held }: { held: Record<MoteName, number> }): JSX.Element
             onFraction={p.setFraction}
             spares={p.spares}
             onSpares={p.setSpares}
-            condense={p.condense}
-            onCondense={p.setCondense}
           />
         )}
         {p.plan.gear && <PlanSteps plan={p.plan.gear} />}
@@ -110,6 +107,7 @@ function PlannerPanel({ held }: { held: Record<MoteName, number> }): JSX.Element
 export default function MotesView(): JSX.Element {
   const { lootHistory, itemOverrides } = useProgress()
   const held = useMemo(() => heldMotes(lootHistory, itemOverrides), [lootHistory, itemOverrides])
+  const p = usePlanner(held)
   const scannedAt = itemOverrides.find((o) => o.key === MOTES[0].name.toLowerCase())?.setAt
 
   useEffect(() => {
@@ -160,6 +158,17 @@ export default function MotesView(): JSX.Element {
             </Typography>
           )}
           {auto.note && <Typography variant="body2" color="success.main">{auto.note}</Typography>}
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={p.condense}
+                onChange={(e) => p.setCondense(e.target.checked)}
+                data-testid="motes-condense"
+              />
+            }
+            label="Condense motes"
+          />
         </Stack>
         {scan && <ScanPreview result={scan} onClose={() => setScan(null)} />}
         <Alert severity="info" sx={{ my: 1 }}>
@@ -177,7 +186,7 @@ export default function MotesView(): JSX.Element {
         </Table>
       </Paper>
 
-      <PlannerPanel held={held} />
+      <PlannerPanel p={p} />
     </Stack>
   )
 }
