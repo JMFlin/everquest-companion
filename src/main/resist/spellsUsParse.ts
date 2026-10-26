@@ -11,7 +11,10 @@
 // redistribute it or anything derived from it, which is also why the ledger stores observations
 // rather than conclusions: nothing on disk in this repo needs the table to be meaningful.
 //
-// THE FIELD MAP, verified by measurement against the owner's install (2026-08-16):
+// THE FIELD MAP, verified by measurement against the owner's install (2026-08-16), and re-measured
+// after the 2026-10-23 client patch, which inserted one column before the resist adjust: every
+// field from 78 on moved up by one, and a row is now 174 fields (Smiting Strike's -250 at 79,
+// Lifetap's category 114 at 87, Rain of Fire's 4 targets at 144, slots at 173):
 //
 //   0    spell id                       1    name
 //   8    cast time, ms                  10   recast (re-use) time, ms (JOS-444)
@@ -19,10 +22,10 @@
 //   14   mana (JOS-451)
 //   29   resist type (see axisFromResistType)
 //   30   target type                    36..51  class levels, WAR..BER (255 = cannot use)
-//   78   resist adjust                  143  aemaxtargets (JOS-449)
-//   172  effect slots, `$`-separated
+//   79   resist adjust                  144  aemaxtargets (JOS-449)
+//   173  effect slots, `$`-separated
 //
-// FIELD 14 IS THE MANA COST, verified the way 10 and 143 were — against the committed catalog rather
+// FIELD 14 IS THE MANA COST, verified the way 10 and 144 were — against the committed catalog rather
 // than against a struct listing (owner's install, 2026-08-23). Over the 1,873 catalog spells that
 // join a client row it agrees EXACTLY on 1,787 of them (95.4%), 553 of those on a shared zero and
 // 1,234 on a shared positive number: Complete Heal 350, Odium 409, Garrison's Mighty Mana Shock 105,
@@ -93,10 +96,10 @@ const F_CLASS_FIRST = 36
 const F_CLASS_COUNT = 16
 /** Index of the bard among the sixteen class-level fields (WAR CLR PAL RNG SHD DRU MNK BRD …). */
 const CLASS_BARD = 7
-const F_RESIST_ADJ = 78
+const F_RESIST_ADJ = 79
 /** `aemaxtargets` (JOS-449) — see `aeTargetsField` for the measurement behind the index. */
-const F_AE_MAX_TARGETS = 143
-const F_SLOTS = 172
+const F_AE_MAX_TARGETS = 144
+const F_SLOTS = 173
 
 const EFFECT_HITPOINTS = 0
 const EFFECT_CHARM = 22
@@ -221,7 +224,7 @@ function recastField(f: readonly string[]): { recastMs?: number } {
 }
 
 /**
- * Field 143, `aemaxtargets`, present only when POSITIVE (JOS-449) — a spreadable fragment for
+ * Field 144, `aemaxtargets`, present only when POSITIVE (JOS-449) — a spreadable fragment for
  * `recastField`'s reason, and absent-means-nothing for the same reason too: 71,864 of the file's
  * 73,971 rows read 0 there, which is what a single-target spell says.
  *

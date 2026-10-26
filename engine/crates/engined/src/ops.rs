@@ -1481,14 +1481,14 @@ mod tests {
         std::fs::create_dir_all(dir.join("Logs")).expect("a scratch install");
 
         let row = |id: &str, name: &str, cat: &str, sub: &str, class: usize, level: &str| {
-            let mut f = vec!["0".to_string(); 173];
+            let mut f = vec!["0".to_string(); 174];
             for field in f.iter_mut().take(52).skip(36) {
                 *field = "255".to_string();
             }
             f[0] = id.to_owned();
             f[1] = name.to_owned();
-            f[86] = cat.to_owned();
-            f[87] = sub.to_owned();
+            f[87] = cat.to_owned();
+            f[88] = sub.to_owned();
             f[36 + class] = level.to_owned();
             f.join("^")
         };

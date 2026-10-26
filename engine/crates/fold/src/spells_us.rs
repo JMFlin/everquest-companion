@@ -20,7 +20,7 @@
 //! `slot | effectId | base | limit | calc | max` rather than `… | max | calc`.
 //!
 //! The JavaScript semantics are the hard part. Every scalar goes through `Number(x)` or
-//! `Number(x) || 0`, and the row filter is `f.length < 172` — not 173, so a row with exactly 172
+//! `Number(x) || 0`, and the row filter is `f.length < 173` — not 174, so a row with exactly 173
 //! fields passes and then reads `undefined` for its slots. Those are the behaviour the app ships,
 //! and a port that corrected them would disagree with the app on real rows. See [`js_number`].
 
@@ -47,18 +47,18 @@ const CLASS_BARD: usize = 7;
 /// window's Category column prints it. The word lives in `dbstr_us.txt` (see [`crate::dbstr`]);
 /// this column is only ever the number.
 ///
-/// Measured against a real install: `Lifetap` reads `86 = 114`, which the string table names
-/// `Taps`, and `87 = 43`, which it names `Health` — the two words the game prints for that spell.
-const F_CATEGORY: usize = 86;
+/// Measured against a real install: `Lifetap` reads `87 = 114`, which the string table names
+/// `Taps`, and `88 = 43`, which it names `Health` — the two words the game prints for that spell.
+const F_CATEGORY: usize = 87;
 /// The spell's subcategory id — `Health`, `Duration Tap`, `Power Tap` under `Taps`.
 ///
 /// Independent of the category rather than nested under it: some rows carry a subcategory with no
-/// category, so a reader that only looked at 87 when 86 was set would lose them. Column 88 is a
+/// category, so a reader that only looked at 88 when 87 was set would lose them. Column 89 is a
 /// third such column and is deliberately not read — the game's own window prints two.
-const F_SUBCATEGORY: usize = 87;
-const F_RESIST_ADJ: usize = 78;
-const F_AE_MAX_TARGETS: usize = 143;
-const F_SLOTS: usize = 172;
+const F_SUBCATEGORY: usize = 88;
+const F_RESIST_ADJ: usize = 79;
+const F_AE_MAX_TARGETS: usize = 144;
+const F_SLOTS: usize = 173;
 
 const EFFECT_HITPOINTS: f64 = 0.0;
 const EFFECT_CHARM: f64 = 22.0;
@@ -355,7 +355,7 @@ struct Slot {
 /// malformed slot field yields `NaN` and that NaN flows into the comparisons below — `NaN >= 0` and
 /// `NaN < 5` are both false, and between them they decide whether a slot becomes a debuff window.
 fn parse_slots(field: Option<&str>) -> Vec<Slot> {
-    // An absent field, which a 172-field row really has (see [`parse_spells_us`]), and also an
+    // An absent field, which a 173-field row really has (see [`parse_spells_us`]), and also an
     // empty one, because `''` is falsy over there.
     let Some(field) = field else {
         return Vec::new();
@@ -581,7 +581,7 @@ fn row_info(f: &[&str], name: &str, class_levels: ClassLevels) -> SpellInfo {
 /// The four filters, in order:
 ///
 ///   * an empty line only — a blank-looking line of spaces falls out at the field-count test.
-///   * `f.length < 172`, not 173: a row with exactly 172 fields passes and then reads `undefined`
+///   * `f.length < 173`, not 174: a row with exactly 173 fields passes and then reads `undefined`
 ///     for its slots, which [`parse_slots`] answers with none. Tightening this drops rows the app
 ///     keeps.
 ///   * an empty name only — a whitespace-only name survives here and dies at the key test, because
@@ -636,14 +636,14 @@ pub fn parse_spells_us(text: &str) -> SpellTable {
 mod tests {
     use super::*;
 
-    /// A row of 173 caret-delimited fields, with the class columns defaulted to `255` (cannot use),
+    /// A row of 174 caret-delimited fields, with the class columns defaulted to `255` (cannot use),
     /// as the app-side suite's own `row()` helper defaults them.
     ///
     /// The rows below are hand-authored, and that is a rule: the client table is Daybreak's file
     /// and no slice of it may enter this repo. The numbers are the ones the app-side suite
     /// transcribed from a real install, so both suites claim the same thing about the same bytes.
     fn row(fields: &[(usize, &str)]) -> String {
-        let mut f = vec!["0".to_string(); 173];
+        let mut f = vec!["0".to_string(); 174];
         for i in 0..F_CLASS_COUNT {
             f[F_CLASS_FIRST + i] = "255".to_string();
         }
@@ -964,7 +964,7 @@ mod tests {
         }
     }
 
-    /// Lifetap — the row that settled the category columns. `86 = 114` and `87 = 43` are what the
+    /// Lifetap — the row that settled the category columns. `87 = 114` and `88 = 43` are what the
     /// install carries, and `dbstr_us.txt` type 5 names them `Taps` and `Health`, which is what the
     /// in-game window prints for that spell. The words are [`crate::dbstr`]'s business.
     #[test]
@@ -997,7 +997,7 @@ mod tests {
     }
 
     /// A subcategory is not nested under a category: some rows carry one with no category at all
-    /// (rogue poisons filed under `Misc`), and a reader that only looked at 87 when 86 was set
+    /// (rogue poisons filed under `Misc`), and a reader that only looked at 88 when 87 was set
     /// would lose them silently.
     #[test]
     fn a_subcategory_with_no_category_is_still_read() {
@@ -1029,11 +1029,11 @@ mod tests {
     }
 
     #[test]
-    fn a_row_with_exactly_one_hundred_and_seventy_two_fields_is_kept() {
-        // `f.length < 172`, not `< 173`. The row passes and then reads `undefined` for its slots,
+    fn a_row_with_exactly_one_hundred_and_seventy_three_fields_is_kept() {
+        // `f.length < 173`, not `< 174`. The row passes and then reads `undefined` for its slots,
         // which is no slots rather than a panic. Tightening the bound would drop rows the app
         // keeps.
-        let mut f = vec!["0".to_string(); 172];
+        let mut f = vec!["0".to_string(); 173];
         f[F_NAME] = "Short Row".to_string();
         for i in 0..F_CLASS_COUNT {
             f[F_CLASS_FIRST + i] = "255".to_string();
