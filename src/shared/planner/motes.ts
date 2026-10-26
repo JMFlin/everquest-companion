@@ -13,10 +13,11 @@
 //   Item_Upgrade_System, Gear Merge Experience: +0 -> 1 ... +9 -> 512), with no tier cap.
 // - Condense: 2 motes of tier n -> 1 of tier n+1, producing at most Ascendant. Spell value is
 //   conserved by condensing (spellXp doubles per tier); gear XP is lost or kept, never gained —
-//   condensing only ever helps gear by raising the cap.
+//   condensing only ever helps gear by raising the cap. Off unless the gear selection opts in.
 //
 // ALLOCATION (one shared pool)
-// 1. Gear first. Exact DP over (cumulative XP, condensed carry) tier by tier, applying in
+// 1. Gear first. Exact DP over (cumulative XP, condensed carry) tier by tier (carry stays 0 when
+//    condensing is off), applying in
 //    ascending itemCap order — a lower-cap mote is only harder to place later, so this order never
 //    strands a mote another order could use. Lexicographic objective: reach `to` (else most XP),
 //    then least spell value consumed, then least overshoot, then fewest condenses, then least
@@ -58,6 +59,8 @@ export interface Selection {
 /** The gear section's selection, plus the tiers of spare copies of the same item to merge. */
 export interface GearSelection extends Selection {
   spares?: number[]
+  /** Whether the plan may condense motes to unlock higher caps (default off). */
+  condense?: boolean
 }
 
 /** XP a spare copy at `tier` merges in for. */
@@ -168,13 +171,13 @@ function keepBetter(layer: Map<number, DpNode>, key: number, cand: DpNode): void
  * condensed ones and condenses nothing it then leaves unused, so tier n+1 draws at most
  * max(0, useful(n+1) - held(n+1)) pairs from tier n. Clamping to these bounds changes no optimum.
  */
-function usefulBounds(counts: number[]): { held: number[]; pairs: number[] } {
+function usefulBounds(counts: number[], condense: boolean): { held: number[]; pairs: number[] } {
   const useful: number[] = MOTES.map(() => 0)
   const pairs: number[] = MOTES.map(() => 0)
   for (let i = MOTES.length - 1; i >= 0; i--) {
     const m = MOTES[i]
     const applications = Math.min(Math.ceil(cumXp(m.itemCap + 1) / m.itemXp), Math.floor(MAX_XP / m.itemXp))
-    pairs[i] = i < CONDENSE_MAX_INDEX ? Math.max(0, useful[i + 1] - counts[i + 1]) : 0
+    pairs[i] = condense && i < CONDENSE_MAX_INDEX ? Math.max(0, useful[i + 1] - counts[i + 1]) : 0
     useful[i] = applications + 2 * pairs[i]
   }
   return { held: counts.map((c, i) => Math.min(c, useful[i])), pairs }
@@ -185,7 +188,7 @@ function planGear(counts: number[], sel: GearSelection): SectionPlan {
   const start = startXp(sel)
   const target = cumXp(sel.to)
   const carryKey = (carry: number, xp: number): number => carry * (MAX_XP + 1) + xp
-  const bounds = usefulBounds(counts)
+  const bounds = usefulBounds(counts, sel.condense ?? false)
 
   let frontier = new Map<number, DpNode>([
     [carryKey(0, start), { value: 0, pairs: 0, spareXp: 0, prev: null, applied: 0, condensed: 0 }]

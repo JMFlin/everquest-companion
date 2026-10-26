@@ -3,7 +3,8 @@
 // Every plan is REPLAYED through an independent simulator of the game rules (condense pairs,
 // gear cap per application, the 1023 ceiling), so a plan that reads right but cannot be executed
 // fails here. Gear optimality is cross-checked against exhaustive search over every valid
-// operation sequence (any order, any interleaving of condense and apply) on small random pools.
+// operation sequence (any order, any interleaving of condense and apply) on small random pools,
+// with condensing both allowed and off.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -38,7 +39,7 @@ function replay(
   counts: number[],
   plan: SectionPlan,
   kind: 'gear' | 'spell',
-  opts: { fraction?: number; spares?: number[] } = {}
+  opts: { fraction?: number; spares?: number[]; condense?: boolean } = {}
 ): { xp: number; value: number } {
   let xp = cum(plan.from) + (opts.fraction ?? 0)
   let value = 0
@@ -59,6 +60,7 @@ function replay(
     const i = idx(step.mote)
     if (step.kind === 'condense') {
       assert.equal(kind, 'gear', 'spells never condense')
+      assert.ok(opts.condense, 'condensed without opting in')
       assert.ok(i + 1 <= idx('Mote of Ascendant Potential'), 'cannot condense into Infinite')
       assert.equal(step.into, NAMES[i + 1])
       counts[i] -= 2 * step.pairs
@@ -153,7 +155,7 @@ test('gear applies in ascending cap order (Infinitesimal only fits at tier 0)', 
 
 test('gear condenses to unlock a higher cap', () => {
   const held = { 'Mote of Potential': 4 }
-  const plan = planMotes(held, { gear: { from: 3, to: 5 } })
+  const plan = planMotes(held, { gear: { from: 3, to: 5, condense: true } })
   const gear = plan.gear as SectionPlan
   assert.deepEqual(gear.steps, [
     { kind: 'condense', mote: 'Mote of Potential', pairs: 1, into: 'Mote of Major Potential' },
@@ -162,6 +164,18 @@ test('gear condenses to unlock a higher cap', () => {
   ])
   assert.equal(gear.shortfallXp, 11)
   assert.equal(plan.remaining['Mote of Potential'], 0)
+  replay(toCounts(held), gear, 'gear', { condense: true })
+})
+
+test('gear never condenses unless asked', () => {
+  const held = { 'Mote of Potential': 4 }
+  const plan = planMotes(held, { gear: { from: 3, to: 5 } })
+  const gear = plan.gear as SectionPlan
+  assert.deepEqual(gear.steps, [
+    { kind: 'apply', mote: 'Mote of Potential', count: 2, after: { full: 4, fraction: 0 } }
+  ])
+  assert.equal(gear.shortfallXp, 16)
+  assert.equal(plan.remaining['Mote of Potential'], 2)
   replay(toCounts(held), gear, 'gear')
 })
 
@@ -172,9 +186,9 @@ test('gear never passes 1023', () => {
 })
 
 test('shared pool: gear then spell never double-books', () => {
-  const plan = planMotes(OWNER, { gear: { from: 0, to: 7 }, spell: { from: 0, to: 10 } })
+  const plan = planMotes(OWNER, { gear: { from: 0, to: 7, condense: true }, spell: { from: 0, to: 10 } })
   const counts = toCounts(OWNER)
-  const gear = replay(counts, plan.gear as SectionPlan, 'gear')
+  const gear = replay(counts, plan.gear as SectionPlan, 'gear', { condense: true })
   const spell = replay(counts, plan.spell as SectionPlan, 'spell')
   assert.deepEqual(counts, toCounts(plan.remaining))
   assert.equal(gear.value + spell.value + spellValue(counts), spellValue(toCounts(OWNER)))
@@ -212,9 +226,9 @@ test('hoards stay fast and plan as the clamped pool does', () => {
 test('a hoard of the lowest tiers (the worst case: everything condenses) stays bounded', () => {
   const held = { 'Mote of Infinitesimal Potential': 1000, 'Mote of Minor Potential': 1000 }
   const t0 = performance.now()
-  const plan = planMotes(held, { gear: { from: 0, to: 10 } })
+  const plan = planMotes(held, { gear: { from: 0, to: 10, condense: true } })
   assert.ok(performance.now() - t0 < 1000)
-  replay(toCounts(held), plan.gear as SectionPlan, 'gear')
+  replay(toCounts(held), plan.gear as SectionPlan, 'gear', { condense: true })
 })
 
 /** Best (reachedKey, -value, -overshoot) over every valid operation sequence, merges anywhere. */
@@ -222,7 +236,7 @@ function bruteForceGear(
   counts: number[],
   from: number,
   to: number,
-  opts: { fraction?: number; spares?: number[] } = {}
+  opts: { fraction?: number; spares?: number[]; condense?: boolean } = {}
 ): [number, number, number] {
   const target = cum(to)
   let best: [number, number, number] = [-1, 0, 0]
@@ -243,7 +257,7 @@ function bruteForceGear(
         n[i]--
         visit(n, xp + MOTES[i].itemXp, value + MOTES[i].spellXp, sp)
       }
-      if (c[i] >= 2 && i + 1 <= idx('Mote of Ascendant Potential')) {
+      if (opts.condense && c[i] >= 2 && i + 1 <= idx('Mote of Ascendant Potential')) {
         const n = [...c]
         n[i] -= 2
         n[i + 1]++
@@ -266,14 +280,15 @@ test('gear DP matches exhaustive search on random small pools', () => {
     for (let i = 0; i < 7; i++) if (rand(3)) held[NAMES[i]] = rand(5)
     const from = rand(5)
     const to = from + 1 + rand(3)
-    const plan = planMotes(held, { gear: { from, to } })
-    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear')
+    const condense = trial % 2 === 0
+    const plan = planMotes(held, { gear: { from, to, condense } })
+    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', { condense })
     const target = cum(to)
-    const expected = bruteForceGear(toCounts(held), from, to)
+    const expected = bruteForceGear(toCounts(held), from, to, { condense })
     assert.deepEqual(
       [Math.min(got.xp, target), -got.value, -Math.max(0, got.xp - target)],
       expected,
-      `trial ${trial}: ${JSON.stringify(held)} ${from}->${to}`
+      `trial ${trial}: ${JSON.stringify(held)} ${from}->${to} condense ${condense}`
     )
   }
 })
@@ -329,13 +344,14 @@ test('gear DP with spare copies and banked progress matches exhaustive search', 
     const to = from + 1 + rand(3)
     const fraction = rand(2 ** from)
     const spares = Array.from({ length: rand(4) }, () => rand(7))
-    const plan = planMotes(held, { gear: { from, to, fraction, spares } })
-    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', { fraction, spares })
+    const condense = trial % 2 === 0
+    const plan = planMotes(held, { gear: { from, to, fraction, spares, condense } })
+    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', { fraction, spares, condense })
     const target = cum(to)
     assert.deepEqual(
       [Math.min(got.xp, target), -got.value, -Math.max(0, got.xp - target)],
-      bruteForceGear(toCounts(held), from, to, { fraction, spares }),
-      `trial ${trial}: ${JSON.stringify(held)} ${from}(+${fraction})->${to} spares ${JSON.stringify(spares)}`
+      bruteForceGear(toCounts(held), from, to, { fraction, spares, condense }),
+      `trial ${trial}: ${JSON.stringify(held)} ${from}(+${fraction})->${to} spares ${JSON.stringify(spares)} condense ${condense}`
     )
   }
 })
