@@ -101,10 +101,21 @@ function GearExtrasPlain(props: {
   onFraction: (f: number) => void
   spares: number[]
   onSpares: (s: number[]) => void
+  condense: boolean
+  onCondense: (c: boolean) => void
 }): JSX.Element {
   return (
     <div style={{ paddingLeft: 38 }}>
       <ProgressPlain from={props.from} fraction={props.fraction} onFraction={props.onFraction} />
+      <label style={{ display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
+        <input
+          type="checkbox"
+          checked={props.condense}
+          onChange={(e) => props.onCondense(e.target.checked)}
+          data-testid="motes-overlay-condense"
+        />
+        Condense motes
+      </label>
       <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
         <span>Spare copy:</span>
         {SPARE_TIERS.map((t) => (
@@ -215,6 +226,8 @@ export default function MotesOverlay(): JSX.Element {
             onFraction={p.setFraction}
             spares={p.spares}
             onSpares={p.setSpares}
+            condense={p.condense}
+            onCondense={p.setCondense}
           />
         )}
         {p.plan.gear && <Steps plan={p.plan.gear} />}

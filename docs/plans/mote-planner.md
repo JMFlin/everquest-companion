@@ -23,8 +23,9 @@ never which mote went into an upgrade. The currency window can.
 - **The seam is the PNG buffer.** Capture needs a live game. Reading is golden-tested on
   `tests/fixtures/currency-window.png`, which must read 24 of 24 rows.
 - **One shared mote pool.** When both a spell and a gear target are picked, gear is planned first
-  with an exact tier-capped DP. It applies motes in ascending cap order, condenses only to unlock
-  a cap, and spends the least spell-equivalent value. The spell then takes what is left,
+  with an exact tier-capped DP. It applies motes in ascending cap order and spends the least
+  spell-equivalent value. Condensing is off by default; a gear checkbox lets the plan condense,
+  and then only to unlock a cap. The spell then takes what is left,
   largest-first. Spell XP values are powers of two, so greedy filling is exact.
 - **Gear takes spare copies and banked progress.** The gear picker also accepts XP already banked
   at the current tier (default 0) and spare copies of the same item. A +t copy merges in for 2^t

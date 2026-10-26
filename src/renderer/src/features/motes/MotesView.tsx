@@ -92,6 +92,8 @@ function PlannerPanel({ held }: { held: Record<MoteName, number> }): JSX.Element
             onFraction={p.setFraction}
             spares={p.spares}
             onSpares={p.setSpares}
+            condense={p.condense}
+            onCondense={p.setCondense}
           />
         )}
         {p.plan.gear && <PlanSteps plan={p.plan.gear} />}
