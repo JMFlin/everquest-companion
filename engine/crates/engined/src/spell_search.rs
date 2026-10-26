@@ -285,13 +285,13 @@ mod tests {
     const F_ID: usize = 0;
     const F_NAME: usize = 1;
     const F_CLASS_FIRST: usize = 36;
-    const F_CATEGORY: usize = 86;
-    const F_SUBCATEGORY: usize = 87;
+    const F_CATEGORY: usize = 87;
+    const F_SUBCATEGORY: usize = 88;
 
     /// Hand-authored rows only — the client table is Daybreak's file and no slice of it may enter
     /// this repo. The ids and words below are transcribed from a real install.
     fn row(fields: &[(usize, &str)]) -> String {
-        let mut f = vec!["0".to_string(); 173];
+        let mut f = vec!["0".to_string(); 174];
         for i in 0..16 {
             f[F_CLASS_FIRST + i] = "255".to_string();
         }

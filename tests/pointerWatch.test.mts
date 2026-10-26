@@ -164,6 +164,14 @@ test('the cadence is 200 ms — generous for a human, and never tighter than 150
 
 // ------------------------------------------------------------------ the registry, on real timers
 
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/** A loaded machine fires real timers late, never early: wait for the state, not for a fixed time. */
+async function until(ok: () => boolean, budgetMs = 5_000): Promise<void> {
+  const deadline = Date.now() + budgetMs
+  while (!ok() && Date.now() < deadline) await sleep(20)
+}
+
 test('ONE interval per kind, and it stops itself the moment it fires', async () => {
   assert.deepEqual(pointerWatchKeys(), [], 'nothing is watched before anything captures')
   const port = fakePort({ x: 150, y: 150 })
@@ -172,7 +180,7 @@ test('ONE interval per kind, and it stops itself the moment it fires', async () 
   startPointerWatch('fight', port)
   assert.deepEqual(pointerWatchKeys(), ['fight'])
 
-  await new Promise((r) => setTimeout(r, POINTER_WATCH_MS * 2 + 60))
+  await until(() => port.reads >= 2)
   assert.ok(port.reads >= 2, `the watch is running (${port.reads} reads)`)
   assert.equal(port.exits, 0, 'the pointer is inside — nothing is sent')
   assert.equal(port.confirms, 0, 'and the window is never asked while it is inside')
@@ -183,7 +191,8 @@ test('ONE interval per kind, and it stops itself the moment it fires', async () 
     port.reads++
     return { x: 900, y: 900 }
   }
-  await new Promise((r) => setTimeout(r, POINTER_WATCH_MS * 2 + 60))
+  await until(() => port.exits > 0)
+  await sleep(POINTER_WATCH_MS * 2 + 60)
   assert.equal(port.exits, 1, 'exactly one exit, however many ticks have passed since')
   assert.deepEqual(pointerWatchKeys(), [], 'and the timer is gone with it')
   assert.ok(port.reads > reads)

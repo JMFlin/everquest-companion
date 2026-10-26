@@ -167,7 +167,7 @@ mod tests {
     /// One 173-field row. Hand-authored: the client table is Daybreak's file and no slice of it may
     /// enter this repo.
     fn row(id: &str, name: &str, resist_type: &str, slots: &str) -> String {
-        let mut f = vec!["0".to_string(); 173];
+        let mut f = vec!["0".to_string(); 174];
         for field in f.iter_mut().take(52).skip(36) {
             *field = "255".to_string();
         }
@@ -175,7 +175,7 @@ mod tests {
         f[1] = name.to_string();
         f[29] = resist_type.to_string();
         f[49] = "39".to_string();
-        f[172] = slots.to_string();
+        f[173] = slots.to_string();
         f.join("^")
     }
 

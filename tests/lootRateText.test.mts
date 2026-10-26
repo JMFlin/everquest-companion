@@ -83,7 +83,8 @@ test('no drops in the window ⇒ no line at all', () => {
 /** Thousands separate, like every other count in this caption. */
 test('the numerator is grouped, like every other count on the ledger', () => {
   const text = lootRateText(rates({ drops: 12_400, dropsPerHourActive: 12_400, dropsPerHourWall: 6_200 })) ?? ''
-  assert.ok(text.startsWith('12,400 drops · '), text)
+  // Grouped in the display locale, as `toLocaleString()` does everywhere else on the ledger.
+  assert.ok(text.startsWith(`${(12_400).toLocaleString()} drops · `), text)
 })
 
 /**

@@ -139,7 +139,7 @@ impl Staged {
     /// enter this repo.
     fn stage_spell_table(&self) {
         let row = |id: &str, name: &str, resist: &str, slots: &str| {
-            let mut f = vec!["0".to_string(); 173];
+            let mut f = vec!["0".to_string(); 174];
             for field in f.iter_mut().take(52).skip(36) {
                 *field = "255".to_string();
             }
@@ -148,7 +148,7 @@ impl Staged {
             f[29] = resist.to_owned();
             // An enchanter level, so the row is one a player can learn.
             f[49] = "16".to_owned();
-            f[172] = slots.to_owned();
+            f[173] = slots.to_owned();
             f.join("^")
         };
         std::fs::write(

@@ -349,7 +349,8 @@ test('THE WIRING: the read failure evicts, counts, and never reaches the error s
   // order is the pin: evict, then count, then decide whether to say anything.
   const src = readFileSync(join(TEST_ROOT, 'src/main/imageCache.ts'), 'utf8')
   // The catch does one thing and files nothing.
-  const readCatch = src.slice(src.indexOf('const bytes = await readFile(path)'), src.indexOf('return null\n  }'))
+  const start = src.indexOf('const bytes = await readFile(path)')
+  const readCatch = src.slice(start, src.indexOf('return null\n  }', start))
   assert.match(readCatch, /await healUnreadableEntry\(path, err, repair, warn\)/)
   assert.doesNotMatch(readCatch, /onError\(/, 'a self-healed read never files an error')
   // …and that one thing is: evict (userData only), count, then decide whether to say anything.

@@ -34,7 +34,7 @@ import { parseSpellsUs } from '../src/main/resist/spellsUsParse'
 
 /**
  * Build one caret row. Only the fields this parser reads are filled; the rest are the padding the
- * real file carries. 173 fields, exactly as the client writes them.
+ * real file carries. 174 fields, exactly as the client writes them.
  */
 function row(spec: {
   id: number
@@ -75,7 +75,7 @@ function row(spec: {
     slots: '',
     ...spec
   }
-  const f = new Array<string>(173).fill('0')
+  const f = new Array<string>(174).fill('0')
   f[0] = String(s.id)
   f[1] = s.name
   f[8] = String(s.castMs)
@@ -88,8 +88,8 @@ function row(spec: {
   f[30] = String(s.targetType)
   for (let i = 0; i < 16; i++) f[36 + i] = '255'
   for (const [idx, lvl] of Object.entries(s.classes)) f[36 + Number(idx)] = String(lvl)
-  f[78] = String(s.resistAdj)
-  f[172] = s.slots
+  f[79] = String(s.resistAdj)
+  f[173] = s.slots
   return f.join('^')
 }
 
@@ -149,7 +149,7 @@ test('the axis comes from field 29, and the four unmodellable kinds come back nu
   assert.equal(TABLE.tashani.axis, null)
 })
 
-test('the resist adjust is field 78, and it is what makes a proc land', () => {
+test('the resist adjust is field 79, and it is what makes a proc land', () => {
   assert.equal(TABLE['smiting strike'].resistAdj, -250)
   assert.equal(TABLE['divine might strike'].resistAdj, -150)
   assert.equal(TABLE['chaos flux'].resistAdj, 0)
@@ -280,7 +280,7 @@ test('JOS-451: the mana cost is FIELD 14, and a zero there is an absence', () =>
   assert.equal(TABLE.odium.mana, 409)
   assert.equal(TABLE['ethereal cleansing'].mana, 150)
   // A bard song is free, and the file says so with a 0. Storing it would put a field on half the
-  // table to state what its absence states — the same rule field 10 and field 143 follow.
+  // table to state what its absence states — the same rule field 10 and field 144 follow.
   assert.equal(TABLE['chords of dissonance'].mana, undefined)
   assert.equal(TABLE.tashani.mana, undefined)
 })

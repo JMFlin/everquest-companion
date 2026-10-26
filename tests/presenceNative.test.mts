@@ -57,11 +57,16 @@ test('the CURSOR answers a boolean, and answers it fast enough to gate an 8 ms s
   // the number that matters (0.43 us measured locally) is recorded in presenceProtocol.ts's
   // cadence note. What this catches is a regression of a different ORDER: a marshalling change
   // that turns a syscall into something with allocation in it.
+  // The best of five batches is the call's cost; a batch the scheduler preempted on a loaded box
+  // (a full parallel `npm test`) measures the box instead.
   const s = surface()
   assert.equal(typeof s.cursorShowing(), 'boolean')
-  const t0 = process.hrtime.bigint()
-  for (let i = 0; i < 2000; i++) s.cursorShowing()
-  const usPerCall = Number(process.hrtime.bigint() - t0) / 2000 / 1000
+  let usPerCall = Infinity
+  for (let batch = 0; batch < 5; batch++) {
+    const t0 = process.hrtime.bigint()
+    for (let i = 0; i < 400; i++) s.cursorShowing()
+    usPerCall = Math.min(usPerCall, Number(process.hrtime.bigint() - t0) / 400 / 1000)
+  }
   assert.ok(usPerCall < 50, `a tick-rate call cost ${usPerCall.toFixed(2)} us`)
 })
 

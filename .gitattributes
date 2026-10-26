@@ -13,3 +13,8 @@
 # change (they were already LF); only the checkout does.
 scripts/sources/cache/** text eol=lf
 src/main/data/spells.json text eol=lf
+
+# The achievements dump is CRLF in the game's own output, and tests/outputsAchievements.test.mts
+# asserts exactly that against this fixture. The blob is stored LF, so without this its checkout
+# follows the machine's `core.autocrlf` and the test passes on one box and fails on the next.
+tests/fixtures/Primitive_freeport-Achievements.txt text eol=crlf
