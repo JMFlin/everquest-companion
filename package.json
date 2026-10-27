@@ -65,7 +65,7 @@
     "phonemizer": "1.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "tesseract.js": "5.1.1"
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1104.0",
