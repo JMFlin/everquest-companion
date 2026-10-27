@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { createWorker, OEM, PSM, type Line, type Word, type Worker } from 'tesseract.js'
 import { decodePng, encodePng, type Rgba } from './png'
 import { binarizeForOcr, flattenRows, crop, resize, upscale, type Rect } from './raster'
-import { currencyVocabulary, matchCurrencyName } from './vocabulary'
+import { currencyVocabulary, isUntrackedCurrency, matchCurrencyName } from './vocabulary'
 import { locateIn, MATCH, prepare } from './locate'
 import { learnDigits, readByGlyphs } from './glyphs'
 
@@ -377,12 +377,13 @@ function agreed(reads: readonly string[]): string | null {
   return numbers.size === 1 && /^\d+$/.test(only) ? only : null
 }
 
-/** Every row lands in `counts` or, verbatim, in `unmatched`. */
+/** Every row but an untracked currency's lands in `counts` or, verbatim, in `unmatched`. */
 function resolveRows(rows: readonly Row[]): { counts: Record<string, number>; unmatched: string[] } {
   const vocab = currencyVocabulary()
   const counts: Record<string, number> = {}
   const unmatched: string[] = []
   for (const row of rows) {
+    if (isUntrackedCurrency(row.name)) continue
     const name = matchCurrencyName(row.name, vocab)
     if (name !== null && row.qty !== null && !(name in counts)) counts[name] = Number(row.qty)
     else unmatched.push(`${row.name} | ${row.qty ?? '?'}`)

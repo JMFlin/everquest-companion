@@ -9,7 +9,7 @@ import { createCurrencyReader, findHeader, showsCurrencyWindow, type CurrencyRea
 import { decodePng, encodePng } from '../src/main/currencyScan/png'
 import { locateFingerprint } from '../src/main/currencyScan/locate'
 import { crop, resize } from '../src/main/currencyScan/raster'
-import { currencyVocabulary, matchCurrencyName } from '../src/main/currencyScan/vocabulary'
+import { currencyVocabulary, isUntrackedCurrency, matchCurrencyName } from '../src/main/currencyScan/vocabulary'
 import { MOTES } from '../src/shared/planner/motes'
 
 const LANG_DIR = join(import.meta.dirname, '..', 'resources', 'ocr')
@@ -150,6 +150,14 @@ test('column-divider and period junk around a live-capture name still matches', 
   const vocab = currencyVocabulary()
   assert.equal(matchCurrencyName('® Beza Wind Runes. |', vocab), 'Wind Rune Beza')
   assert.equal(matchCurrencyName('@ Jaka Wind Runes |', vocab), 'Wind Rune Jaka')
+})
+
+test('currencies the window lists but the app does not track are recognised, icon junk and all', () => {
+  for (const row of ['ESExpedient Delivery Vouchers', '®mExpedient Delivery Vouchers', '@Tokens of Reclamation', '@ Tokens of Reclamation']) {
+    assert.ok(isUntrackedCurrency(row), row)
+  }
+  assert.ok(!isUntrackedCurrency('@Motes of Greater Potential'))
+  assert.ok(!isUntrackedCurrency('® Beza Wind Runes. |'))
 })
 
 test('the header words in running text are not a header (they once matched this app message)', () => {
