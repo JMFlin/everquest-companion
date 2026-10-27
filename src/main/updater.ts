@@ -166,6 +166,12 @@ import { classifyFailure, recordEvent } from './telemetry'
 
 const { autoUpdater } = electronUpdater
 
+// Compile-time, from the main `define` in electron.vite.config.ts: false for a build made with
+// EQ_NO_AUTO_UPDATE=1 (a fork/local build that upstream releases must not overwrite). Absent
+// define reads as enabled, the shipped behaviour.
+declare const __EQ_AUTO_UPDATE__: boolean | undefined
+const AUTO_UPDATE_BUILD = typeof __EQ_AUTO_UPDATE__ === 'undefined' || __EQ_AUTO_UPDATE__
+
 /**
  * THE TWO SINKS `updateLog.ts` ROUTES THROUGH (JOS-295). They are handed over rather than
  * imported there so the whole routing rule stays drivable from a node test with no Electron in
@@ -581,7 +587,7 @@ export function initUpdater(
   ipcMain.handle(IPC.getAppVersion, () => app.getVersion())
   ipcMain.handle(IPC.getUpdateStatus, () => lastStatus)
 
-  if (!app.isPackaged) {
+  if (!app.isPackaged || !AUTO_UPDATE_BUILD) {
     // Say so in the status itself: without the flag the chip renders "not checked yet"
     // forever (dev never checks), which reads as a broken updater rather than an absent one.
     // No checkedAt — a stamp inherited from the store would claim a check this process
@@ -589,7 +595,9 @@ export function initUpdater(
     lastStatus = { state: 'idle', disabled: true }
     ipcMain.handle(IPC.installUpdate, noInstallInDev)
     ipcMain.handle(IPC.checkForUpdates, () => lastStatus)
-    logInfo('[everquest-companion] Auto-update disabled (dev / not packaged).')
+    logInfo(
+      `[everquest-companion] Auto-update disabled (${app.isPackaged ? 'EQ_NO_AUTO_UPDATE build' : 'dev / not packaged'}).`
+    )
     return
   }
 

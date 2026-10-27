@@ -150,6 +150,10 @@ the retention details.
 Contributions welcome. Everything about building, testing, and the architecture lives in
 [`AGENTS.md`](AGENTS.md) — start there.
 
+Installing your own build? Build it with `EQ_NO_AUTO_UPDATE=1` (PowerShell:
+`$env:EQ_NO_AUTO_UPDATE='1'; npm run dist`), or the app's updater will replace it with
+the latest official release the next time you quit.
+
 ## License
 
 FSL-1.1-MIT (Functional Source License, converting to MIT after two years) — see
