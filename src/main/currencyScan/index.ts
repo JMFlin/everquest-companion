@@ -111,7 +111,7 @@ async function read(workers: Workers, img: Rgba, fingerprints: readonly Fingerpr
     if (Object.keys(r.counts).length > 0) return { ...r, fingerprint: fingerprintOf(img, header) }
   }
   await workers[0].setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT, tessedit_char_whitelist: '' })
-  const header = findHeader((await workers[0].recognize(encodePng(img))).data.words)
+  const header = findHeader((await recognizeCrop(workers[0], img)).flatMap((line) => line.words))
   if (header === null) return { error: 'not-currency-window' }
   const r = await readWindow(workers, img, header)
   // A window that lists nothing readable is not evidence of anything; never offer it as a result.
@@ -295,8 +295,10 @@ function glyphCount(cell: Rgba): number {
   return count
 }
 
+// tesseract.js 6+ returns only the block tree, and only when asked for it; flatten it to lines.
 async function recognizeCrop(worker: Worker, img: Rgba): Promise<Line[]> {
-  return (await worker.recognize(encodePng(img))).data.lines
+  const { blocks } = (await worker.recognize(encodePng(img), {}, { blocks: true })).data
+  return (blocks ?? []).flatMap((block) => block.paragraphs.flatMap((paragraph) => paragraph.lines))
 }
 
 /**
