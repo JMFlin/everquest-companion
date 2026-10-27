@@ -97,6 +97,34 @@ test('settles a split digit on the selected row from the digits of the same capt
   })
 })
 
+// Live capture (owner, 2026-10-27) with "Show currencies that you don't have" on: a lone "0" sits
+// beside the window's bright right border, and two currencies the app does not track are listed.
+test('reads zero rows next to the window border, skipping untracked currencies', async () => {
+  const png = readFileSync(join(import.meta.dirname, 'fixtures', 'currency-zero-rows.png'))
+  assertReads(await reader.read(png), {
+    ...EXPECTED,
+    'Wind Rune Beza': 8,
+    'Wind Rune Dena': 4,
+    'Wind Rune Ena': 9,
+    'Wind Rune Heda': 6,
+    'Wind Rune Jaka': 12,
+    'Wind Rune Kala': 8,
+    'Wind Rune Lena': 8,
+    'Wind Rune Meda': 6,
+    'Wind Rune Neza': 6,
+    'Mote of Ascendant Potential': 0,
+    'Mote of Grand Potential': 0,
+    'Mote of Greater Potential': 0,
+    'Mote of Infinite Potential': 0,
+    'Mote of Infinitesimal Potential': 37,
+    'Mote of Lesser Potential': 2,
+    'Mote of Major Potential': 41,
+    'Mote of Minor Potential': 26,
+    'Mote of Potential': 15,
+    'Mote of Superior Potential': 0
+  })
+})
+
 test('finds the window at an offset inside a larger capture', async () => {
   const win = decodePng(FIXTURE)
   const canvas = blackCanvas(win.width + 400, win.height + 300)

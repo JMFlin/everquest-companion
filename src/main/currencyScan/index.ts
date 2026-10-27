@@ -279,20 +279,43 @@ async function readCell(worker: Worker, cell: Rgba, k: number): Promise<string |
   return agreed(reads)
 }
 
-/** Separate ink blobs left to right in the cell's middle band: one per drawn digit. */
+/**
+ * Separate ink blobs that reach the cell's middle band: one per drawn digit. Blobs are traced over
+ * the whole cell, so a "0" whose sides the band sees apart stays one glyph by its top and bottom.
+ */
 function glyphCount(cell: Rgba): number {
   const flat = flattenRows(cell)
-  const band0 = Math.floor(cell.height / 4)
-  const band1 = Math.ceil((cell.height * 3) / 4)
+  const { width, height } = flat
+  const band0 = Math.floor(height / 4)
+  const band1 = Math.ceil((height * 3) / 4)
+  // 1 = background or already part of a counted blob.
+  const seen = new Uint8Array(width * height)
+  for (let i = 0; i < seen.length; i++) if (flat.data[i * 4] <= GLYPH_INK) seen[i] = 1
   let count = 0
-  let inGlyph = false
-  for (let x = 0; x < flat.width; x++) {
-    let ink = false
-    for (let y = band0; y < band1 && !ink; y++) ink = flat.data[(y * flat.width + x) * 4] > GLYPH_INK
-    if (ink && !inGlyph) count++
-    inGlyph = ink
+  for (let i = band0 * width; i < band1 * width; i++) {
+    if (seen[i]) continue
+    count++
+    fillBlob(seen, width, i)
   }
   return count
+}
+
+/** Marks the 8-connected unseen pixels joined to `start` as seen. */
+function fillBlob(seen: Uint8Array, width: number, start: number): void {
+  const height = seen.length / width
+  const stack = [start]
+  seen[start] = 1
+  for (let i = stack.pop(); i !== undefined; i = stack.pop()) {
+    const x = i % width
+    const y = (i - x) / width
+    for (let n = 0; n < 9; n++) {
+      const nx = x + (n % 3) - 1
+      const ny = y + Math.floor(n / 3) - 1
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height || seen[ny * width + nx]) continue
+      seen[ny * width + nx] = 1
+      stack.push(ny * width + nx)
+    }
+  }
 }
 
 // tesseract.js 6+ returns only the block tree, and only when asked for it; flatten it to lines.
