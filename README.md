@@ -1,5 +1,8 @@
 # EQ Legends Companion
 
+> **This is a fork** of [jmoyers/everquest-companion](https://github.com/jmoyers/everquest-companion)
+> that adds Motes. Build and sync instructions: [`FORK.md`](FORK.md).
+
 A Windows desktop companion for **EverQuest Legends**. It reads the log file the game
 already writes and turns it into live, useful views — a DPS meter, floating overlays,
 quest and loot tracking, alerts.
@@ -149,10 +152,6 @@ the retention details.
 
 Contributions welcome. Everything about building, testing, and the architecture lives in
 [`AGENTS.md`](AGENTS.md) — start there.
-
-Installing your own build? Build it with `EQ_NO_AUTO_UPDATE=1` (PowerShell:
-`$env:EQ_NO_AUTO_UPDATE='1'; npm run dist`), or the app's updater will replace it with
-the latest official release the next time you quit.
 
 ## License
 
