@@ -29,17 +29,17 @@
 
 import React from 'react'
 
+/** React 19's client internals; `H` is the current hook dispatcher. */
 interface DispatcherHost {
-  ReactCurrentDispatcher: { current: unknown }
+  H: unknown
 }
 
 const internals = (React as unknown as Record<string, unknown>)
-  .__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED as DispatcherHost | undefined
+  .__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE as DispatcherHost | undefined
 
-if (!internals?.ReactCurrentDispatcher) {
+if (!internals || !('H' in internals)) {
   throw new Error('hookHost: this React build exposes no dispatcher seam — see the header')
 }
-const CURRENT = internals.ReactCurrentDispatcher
 
 type Deps = readonly unknown[] | undefined
 /** What an effect may return: a cleanup, or nothing. React's own `Destructor | void`, spelled in
@@ -167,12 +167,12 @@ export function mountHook<T>(hook: () => T): HookHost<T> {
 
   const renderOnce = (): void => {
     index = 0
-    const previous = CURRENT.current
-    CURRENT.current = dispatcher
+    const previous = internals.H
+    internals.H = dispatcher
     try {
       value = hook()
     } finally {
-      CURRENT.current = previous
+      internals.H = previous
     }
     commit()
   }

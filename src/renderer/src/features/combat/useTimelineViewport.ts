@@ -32,7 +32,7 @@ export interface ViewportArgs {
   dur: number
   /** identity of the selected encounter — a change re-fits the window. */
   id: string
-  svgRef: RefObject<SVGSVGElement>
+  svgRef: RefObject<SVGSVGElement | null>
   labelW: number
   plotW: number
 }

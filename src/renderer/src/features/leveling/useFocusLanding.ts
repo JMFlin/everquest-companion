@@ -117,7 +117,7 @@ function bringIntoContent(el: HTMLElement | null): void {
 
 /** What the panel needs from a landing: where to hang the ref, and which nonce (if any) is lit. */
 export interface FocusLanding {
-  ref: RefObject<HTMLDivElement>
+  ref: RefObject<HTMLDivElement | null>
   /** the nonce currently being landed, or null when nothing is. Doubles as the pulse's React key. */
   seq: number | null
 }

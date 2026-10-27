@@ -92,7 +92,7 @@ function PickerTrigger({
   now,
   emptyLabel
 }: {
-  anchorRef: React.RefObject<HTMLButtonElement>
+  anchorRef: React.RefObject<HTMLButtonElement | null>
   p: PickerState
   scope: CombatScope
   disabled: boolean

@@ -73,7 +73,7 @@ export interface MapViewportArgs {
   /** Identity of the loaded map — a change re-fits the view. The zone short name will do. */
   id: string
   /** The positioned box the canvas and the label layer fill. Measured, and the pointer target. */
-  hostRef: RefObject<HTMLElement>
+  hostRef: RefObject<HTMLElement | null>
 }
 
 /** Everything the canvas, the label layer and the toolbar need. Passed down as one object. */
@@ -120,7 +120,7 @@ export interface MapViewport {
  * So: read the box SYNCHRONOUSLY in a layout effect (before paint, no blank first frame — the
  * `useWindowedRows.ts` precedent), then observe for the resizes that follow.
  */
-function useHostSize(hostRef: RefObject<HTMLElement>, id: string): ViewportSize {
+function useHostSize(hostRef: RefObject<HTMLElement | null>, id: string): ViewportSize {
   const [size, setSize] = useState<ViewportSize>({ w: 0, h: 0 })
   useLayoutEffect(() => {
     const el = hostRef.current

@@ -52,7 +52,7 @@ const SCROLL_SX = { position: 'absolute', inset: 0, overflow: 'auto' } as const
  * chart for a size that did not move is pure waste. It is NOT the fix — a same-value guard cannot
  * damp an oscillation whose values genuinely differ.
  */
-function useWrapSize(ref: React.RefObject<HTMLDivElement>): WrapSize {
+function useWrapSize(ref: React.RefObject<HTMLDivElement | null>): WrapSize {
   const [wrap, setWrap] = useState<WrapSize>({ w: 900, h: 400 })
   useEffect(() => {
     const el = ref.current
