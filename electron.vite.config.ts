@@ -30,6 +30,13 @@ export default defineConfig({
     // pretty-printed object literals — measured 4.66 MB smaller main bundle and a faster
     // startup parse the day items.json (6.8 MB raw) landed.
     json: { stringify: true },
+    // `__EQ_AUTO_UPDATE__` — false when the build runs with EQ_NO_AUTO_UPDATE=1. A fork or
+    // local build carries its own version (package.json says 0.1.0), so the updater sees every
+    // upstream release as newer and installs it over the build on the next quit. Unset, the
+    // updater runs as it always has. Read only in src/main/updater.ts, behind a `typeof` guard.
+    define: {
+      __EQ_AUTO_UPDATE__: JSON.stringify(process.env.EQ_NO_AUTO_UPDATE !== '1')
+    },
     build: {
       // ---- SOURCEMAPS (JOS-100) --------------------------------------------------------
       // ON FOR ALL THREE BUNDLES, so an `errorReport`'s `out/…:line:col` frames can be turned
