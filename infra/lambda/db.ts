@@ -111,7 +111,7 @@ const BACKOFF_MS = 25
  * and `src/shared/feedback.ts` types all of them `number`. Convert once, here,
  * instead of casting at twenty call sites.
  */
-types.setTypeParser(20, (value: string): number => Number(value))
+types.setTypeParser(types.builtins.INT8, (value: string): number => Number(value))
 
 /** CloudWatch gets structured lines; `no-console` is on repo-wide and stdout is the sink anyway. */
 export function log(fields: Record<string, unknown>): void {

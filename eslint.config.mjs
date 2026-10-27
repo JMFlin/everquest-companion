@@ -310,7 +310,14 @@ export default tseslint.config(
   // ---- react-hooks (renderer only) ---------------------------------------
   {
     files: ['src/renderer/**/*.{ts,tsx}'],
-    ...reactHooks.configs['recommended-latest'],
+    ...reactHooks.configs.flat['recommended-latest'],
+    // v7's recommended set adds the React Compiler rules. This app does not run the compiler,
+    // and the patterns they flag (a latest-value ref written during render, state set from an
+    // effect) are correct without it, so only the classic two rules apply.
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn'
+    }
   },
 
   // ---- 2b. THE NO-MUNGING LAW (owner ruling 4, JOS-501) -------------------

@@ -62,4 +62,3 @@ export const ALL_LOG_EVENT_KINDS = [
 // union is not assignable to the array's element type.
 type _KindsInArray = (typeof ALL_LOG_EVENT_KINDS)[number]
 const _exhaustive: _KindsInArray = null as unknown as LogEventKind
-void _exhaustive

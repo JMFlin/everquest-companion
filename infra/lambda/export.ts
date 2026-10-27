@@ -106,7 +106,7 @@ const STATEMENT_TIMEOUT_MS = 30_000
 const UNDEFINED_TABLE = '42P01'
 
 /** Same reasoning as db.ts: int8 arrives as a STRING and every bigint here is exactly a double. */
-types.setTypeParser(20, (value: string): number => Number(value))
+types.setTypeParser(types.builtins.INT8, (value: string): number => Number(value))
 
 /** Structured stdout, the same shape both ingest handlers use. */
 function log(fields: Record<string, unknown>): void {

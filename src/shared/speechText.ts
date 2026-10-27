@@ -111,9 +111,6 @@ export const SPEECH_ENGINES = ['system', 'kokoro'] as const satisfies readonly S
 const _modesExhaustive: (typeof SPEECH_MODES)[number] = null as unknown as SpeechMode
 const _actionsExhaustive: (typeof ALERT_AUDIO_ACTIONS)[number] = null as unknown as AlertAudio
 const _enginesExhaustive: (typeof SPEECH_ENGINES)[number] = null as unknown as SpeechEngine
-void _modesExhaustive
-void _actionsExhaustive
-void _enginesExhaustive
 
 /**
  * The voice's CONFIGURATION at its defaults — the free, zero-download tier, the engine's own

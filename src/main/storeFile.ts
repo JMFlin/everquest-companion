@@ -411,9 +411,8 @@ export function migrateStoreFile(storePath: string, hooks: MigrationHooks = {}):
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
-  } catch (err) {
+  } catch {
     parsed = undefined
-    void err
   }
   if (isPlainObject(parsed)) return runMigration(storePath, { data: parsed, raw }, hooks)
 
