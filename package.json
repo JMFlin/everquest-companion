@@ -57,7 +57,7 @@
     "@mui/icons-material": "^6.1.6",
     "@mui/material": "^6.1.6",
     "@mui/x-data-grid": "^7.22.2",
-    "chokidar": "^4.0.1",
+    "chokidar": "^6.0.0",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.8.11",
     "koffi": "2.16.3",
