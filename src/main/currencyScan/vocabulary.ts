@@ -20,6 +20,16 @@ export function currencyVocabulary(): readonly string[] {
 }
 
 /**
+ * Currencies the window also lists that no planner reads, as the window spells them. A row naming
+ * one is skipped rather than left unreadable, which would block every scan from saving.
+ */
+const UNTRACKED: readonly string[] = ['Expedient Delivery Vouchers', 'Tokens of Reclamation']
+
+export function isUntrackedCurrency(text: string): boolean {
+  return matchCurrencyName(text, UNTRACKED) !== null
+}
+
+/**
  * The window spells stacks in the plural and runes suffix-first ("Azia Wind Runes");
  * rewrite to the item name ("Wind Rune Azia"). Leading icon junk and trailing column-divider
  * junk ("Beza Wind Runes. |") are stripped.
