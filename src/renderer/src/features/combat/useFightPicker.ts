@@ -34,7 +34,7 @@ export interface PickerState {
   stale: boolean
   clampedActive: number
   setActive: (i: number) => void
-  listRef: React.RefObject<HTMLUListElement>
+  listRef: React.RefObject<HTMLUListElement | null>
   commit: (row: PickerRow) => void
   onKeyDown: (e: React.KeyboardEvent) => void
   /** the sanctioned thaw: ask for a bigger page and arm the single re-freeze. */
