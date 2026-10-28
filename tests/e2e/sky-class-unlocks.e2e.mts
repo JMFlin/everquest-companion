@@ -35,8 +35,12 @@
  *
  * Run: `npm run test:e2e -- sky-class-unlocks`.
  */
+import { mkdirSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Page } from 'playwright-core'
-import { buildIfStale, check, countOf, dumpArtifacts, failures, reportRun, settle } from './appHarness.mjs'
+import type { EqApi } from '../../src/preload/index'
+import posky from '../../src/renderer/src/data/eqlegends/posky.json'
+import { ARTIFACTS, buildIfStale, check, countOf, dumpArtifacts, failures, reportRun, settle } from './appHarness.mjs'
 import { mainWindow } from './appWindow.mjs'
 import { launchOnFixture, stageFixture, type FixtureLog } from './logFixture.mjs'
 
@@ -139,26 +143,32 @@ async function stepRows(page: Page): Promise<void> {
   const note = await page.evaluate((sel) => document.querySelector(sel)?.textContent ?? '', NOTE)
   check(
     'the tab states the ordering, the star, and where each unlock reading came from',
-    note.includes('Fewest tests left first') &&
+    note.includes('Ready to finish') &&
       note.includes('Star a class') &&
-      note.includes('unlocked by a line in your log') &&
-      note.includes('read from a complete set of turn-ins'),
+      note.includes('unlocks confirmed by your log') &&
+      note.includes('inferred from completed tests'),
     note.slice(0, 240)
   )
   check(
-    '…and it says outright that a turn-in never claims an unlock by itself',
-    note.includes('prints nothing about unlocking'),
+    'the note distinguishes logged unlocks from test completion',
+    note.includes('Logged unlocks take precedence'),
     note.slice(0, 240)
   )
 }
 
-/** Fewest remaining first, read off the rows themselves rather than from the model. */
 async function stepOrder(page: Page): Promise<void> {
-  const remaining = await page.evaluate((sel) =>
-    [...document.querySelectorAll(sel)].map((el) => Number(el.getAttribute('data-remaining')))
+  const rows = await page.evaluate((sel) =>
+    [...document.querySelectorAll(sel)].map((el) => ({
+      remaining: Number(el.getAttribute('data-remaining')),
+      ready: el.getAttribute('data-ready-to-finish') === 'true'
+    }))
   , ROW)
-  const ordered = remaining.every((n, i) => i === 0 || remaining[i - 1] <= n)
-  check('CLOSEST TO DONE LEADS - the rows are ordered by tests remaining', ordered, remaining.join(','))
+  const ordered = rows.every((row, i) => i === 0 || (
+    rows[i - 1].ready !== row.ready
+      ? rows[i - 1].ready
+      : rows[i - 1].remaining <= row.remaining
+  ))
+  check('ready-to-finish classes lead, then fewest remaining tests', ordered, JSON.stringify(rows))
 }
 
 /**
@@ -192,9 +202,36 @@ async function stepObservedUnlock(page: Page, log: FixtureLog, at: Date): Promis
 
 /** A turn-in still moves the count it belongs to: the two sources are independent. */
 async function stepTurnInMovesCount(page: Page, log: FixtureLog, at: Date): Promise<void> {
+  // Set up prior completions through the same bridge used by manual turn-in controls.
+  const completed = posky.quests.filter((q) =>
+    q.className === 'Beastlord' && q.name !== 'Beastlord Test of Azarack'
+  ).map((q) => `${q.className}::${q.name}`)
+  await page.evaluate(async ({ keys, timestamp }) => {
+    const eq = (window as unknown as { eq: EqApi }).eq
+    for (const key of keys) await eq.setQuestTurnIns(key, [timestamp])
+  }, { keys: completed, timestamp: at.getTime() - 60_000 })
+  await settle(() => progressOf(page, 'beastlord'), (v) => v?.[0] === completed.length)
   const before = await settle(() => progressOf(page, 'beastlord'), (v) => v !== null, { timeoutMs: 20_000 })
   if (!check('the Beastlord row is on screen', before !== null)) return
-  log.appendAt(at, ...LOOT, ...TURN_IN)
+  log.appendAt(at, ...LOOT)
+  const ready = await settle(
+    () => page.getAttribute(rowOf('beastlord'), 'data-ready-to-finish'),
+    (value) => value === 'true',
+    { timeoutMs: 30_000 }
+  )
+  check('completed tests plus the last ready test make Beastlord ready to finish', ready === 'true')
+  check('the remaining test is counted once as ready', await page.getAttribute(rowOf('beastlord'), 'data-ready') === '1')
+  check('readiness is visible without claiming an unlock',
+    (await rowText(page, 'beastlord')).includes('Ready to finish') && await sourceOf(page, 'beastlord') === '')
+  check('the ready-to-finish class moves to the top', (await rowOrder(page))[0] === 'beastlord')
+  mkdirSync(ARTIFACTS, { recursive: true })
+  await page.screenshot({ path: join(ARTIFACTS, 'classes-ready-normal.png') })
+  await page.setViewportSize({ width: 800, height: 800 })
+  await page.screenshot({ path: join(ARTIFACTS, 'classes-ready-narrow.png') })
+  const fits = await page.locator(rowOf('beastlord')).evaluate((el) => el.scrollWidth <= el.clientWidth)
+  check('the ready class row fits at narrow width', fits)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  log.appendAt(new Date(at.getTime() + 1000), ...TURN_IN)
   const after = await settle(
     () => progressOf(page, 'beastlord'),
     (v) => v !== null && v[0] > (before?.[0] ?? 0),
@@ -205,6 +242,10 @@ async function stepTurnInMovesCount(page: Page, log: FixtureLog, at: Date): Prom
     after !== null && after[0] === (before?.[0] ?? 0) + 1,
     `${JSON.stringify(before)} then ${JSON.stringify(after)}`
   )
+  check('completed tests leave the ready count', await page.getAttribute(rowOf('beastlord'), 'data-ready') === '0')
+  check('a completed class says every test is turned in',
+    (await rowText(page, 'beastlord')).includes('Every test turned in') &&
+      await page.getAttribute(rowOf('beastlord'), 'data-ready-to-finish') === 'false')
 }
 
 /**

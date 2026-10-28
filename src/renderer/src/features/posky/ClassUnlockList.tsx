@@ -8,8 +8,7 @@ import { useClassFavorites } from '../favorites/useQuestFlags'
 import { classUnlockRows, orderClassUnlockRows, type ClassUnlockRow } from './classUnlocks'
 import type { QuestProgress } from './useProgress'
 
-// The Classes tab (JOS-148): one row per class, N of M Sky tests turned in, closest to done
-// first, starred classes pinned above that. classUnlocks.ts owns every rule; this file draws it.
+// Starred classes stay pinned above the readiness order. classUnlocks.ts owns the rules.
 //
 // The tab exists because the Sky class tests are how a class becomes available as a primary — but
 // only PARTLY, which is the fact this rendering is built around. See classUnlocks.ts for the
@@ -28,6 +27,32 @@ function unlockLabel(row: ClassUnlockRow): { text: string; color: 'success' | 'd
   if (row.source === 'observed') return { text: 'Unlocked, the log said so', color: 'success' }
   if (row.source === 'derived') return { text: 'Every test turned in', color: 'success' }
   return { text: `${row.remaining} test${row.remaining === 1 ? '' : 's'} left`, color: 'default' }
+}
+
+function ClassStatus({ row }: { row: ClassUnlockRow }): JSX.Element {
+  const label = unlockLabel(row)
+  const sharedItemsShort = row.remaining > 0 && row.ready === row.remaining && !row.readyToFinish
+  return (
+    <>
+      {(row.readyToFinish || sharedItemsShort) && (
+        <Chip
+          label={row.readyToFinish ? 'Ready to finish' : 'Shared items short'}
+          size="small"
+          color={row.readyToFinish ? 'info' : 'warning'}
+          variant="outlined"
+        />
+      )}
+      {(row.unlocked || (!row.readyToFinish && !sharedItemsShort)) && (
+        <Chip
+          label={label.text}
+          size="small"
+          color={label.color}
+          variant={row.unlocked ? 'filled' : 'outlined'}
+          sx={{ minWidth: 168 }}
+        />
+      )}
+    </>
+  )
 }
 
 /**
@@ -93,12 +118,12 @@ function ClassRow({
   onToggleStar: () => void
   onOpen: () => void
 }): JSX.Element {
-  const label = unlockLabel(row)
   const pct = row.total === 0 ? 0 : (row.turnedIn / row.total) * 100
   return (
     <Stack
       direction="row"
-      spacing={2}
+      gap={1.5}
+      flexWrap="wrap"
       alignItems="center"
       role="button"
       tabIndex={0}
@@ -123,6 +148,8 @@ function ClassRow({
       data-turned-in={row.turnedIn}
       data-total={row.total}
       data-remaining={row.remaining}
+      data-ready={row.ready}
+      data-ready-to-finish={row.readyToFinish}
       data-source={row.source ?? ''}
       sx={{
         px: 1,
@@ -137,24 +164,19 @@ function ClassRow({
       <Typography variant="subtitle2" sx={{ minWidth: 130 }}>
         {row.className}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 64 }}>
-        {row.turnedIn} of {row.total}
-      </Typography>
-      <Box sx={{ flexGrow: 1, minWidth: 80 }}>
+      <Box sx={{ flex: '1 1 200px', minWidth: 0 }}>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+          {row.turnedIn} completed + {row.ready} ready / {row.total} tests
+        </Typography>
         <LinearProgress
+          aria-label={`${row.className} tests completed`}
           variant="determinate"
           value={pct}
           color={row.unlocked ? 'success' : 'primary'}
           sx={{ height: 6, borderRadius: 3 }}
         />
       </Box>
-      <Chip
-        label={label.text}
-        size="small"
-        color={label.color}
-        variant={row.unlocked ? 'filled' : 'outlined'}
-        sx={{ minWidth: 168 }}
-      />
+      <ClassStatus row={row} />
     </Stack>
   )
 }
@@ -169,11 +191,11 @@ function SourceNote({ rows }: { rows: readonly ClassUnlockRow[] }): JSX.Element 
   const derived = rows.filter((r) => r.source === 'derived').length
   return (
     <Typography variant="body2" color="text.secondary" data-testid="class-unlock-note">
-      Fewest tests left first. Click a class to see its quests. Star a class to pin it to the top.{' '}
-      {observed} unlocked by a line in your log, {derived} read from a complete set of turn-ins.
-      Turning in a Sky test prints
-      nothing about unlocking, so a complete set is our reading and not the game saying so; a class
-      can also unlock at level 11 or from a token, which is why a logged unlock outranks the count.
+      Ready to finish first, then fewest tests left. Click a class to see its quests. Star a class to
+      pin it to the top. Counts exclude ignored quests. Ready counts are per quest; Ready to finish
+      checks enough shared items for the whole class. Classes may share items.{' '}
+      {observed} unlocks confirmed by your log, {derived} inferred from completed tests. Logged
+      unlocks take precedence; tokens or leveling can unlock a class without completing its tests.
     </Typography>
   )
 }
