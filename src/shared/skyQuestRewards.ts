@@ -138,3 +138,35 @@ export function correctSkyQuestReward<T extends CorrectableQuest>(q: T): T {
   if (!hit || q.reward !== hit.from) return q
   return { ...q, reward: hit.to, rewardPage: hit.to, rewardStats: hit.stats }
 }
+
+export interface SkyRewardItem {
+  name: string
+  stats?: string
+}
+
+// The scrape records only Windhowl from this weapon pair. Spirit Render's stats come from
+// items.json; the pair is also named by the achievement and the Legends quest guide:
+// https://www.eqprogression.com/legends/plane-of-sky-quests-class-unlocks/
+const SPIRIT_RENDER: SkyRewardItem = {
+  name: 'Spirit Render',
+  stats: [
+    'Lore Equipped, No Trade',
+    'Slot: Secondary',
+    'Skill: Hand to Hand Atk Delay: 23',
+    'DMG: 10',
+    'Dmg Bon: 11',
+    'HP: 25 Mana: 25',
+    "Effect: Sha's Lethargy (Combat, Casting Time: Instant) at Level 46",
+    'WT: 0.1 Size: Tiny',
+    'Class: BST',
+    'Race: ALL'
+  ].join('\n')
+}
+
+export function skyQuestRewardItems(q: CorrectableQuest): readonly SkyRewardItem[] {
+  const rewards: SkyRewardItem[] = q.reward ? [{ name: q.reward, stats: q.rewardStats }] : []
+  if (q.className === 'Beastlord' && q.name === 'Beastlord Test of Claw' && q.reward === 'Windhowl') {
+    rewards.push(SPIRIT_RENDER)
+  }
+  return rewards
+}

@@ -22,7 +22,8 @@ import {
   SKY_QUEST_REWARDS,
   correctSkyQuestReward,
   needsRewardCorrection,
-  skyQuestRewardFor
+  skyQuestRewardFor,
+  skyQuestRewardItems
 } from '../src/shared/skyQuestRewards'
 import { isRenamedItem } from '../src/shared/itemRenames'
 import { rewardInferredQuests } from '../src/renderer/src/features/posky/rewardInference'
@@ -33,6 +34,24 @@ import type { PoskyData } from '../src/shared/types'
 
 const ITEMS = (itemsJson as unknown as ItemDbFile).items
 const POSKY = poskyJson as unknown as PoskyData
+
+test('Beastlord Test of Claw exposes both weapons with the committed Spirit Render stats', () => {
+  const quest = POSKY.quests.find((q) => q.name === 'Beastlord Test of Claw')!
+  const rewards = skyQuestRewardItems(quest)
+  assert.deepEqual(rewards.map((reward) => reward.name), ['Windhowl', 'Spirit Render'])
+  assert.equal(rewards[0].stats, quest.rewardStats)
+  assert.equal(rewards[1].stats, ITEMS['spirit render'].statsBlock!.replace(/\n\n/g, '\n').replace(/\[\[|\]\]/g, ''))
+  assert.equal(skyQuestRewardItems({ ...quest, name: 'Another test' }).length, 1)
+})
+
+test('either Beastlord weapon proves the turn-in, including an exalted Spirit Render', () => {
+  const quest = POSKY.quests.find((q) => q.name === 'Beastlord Test of Claw')!
+  for (const name of ['windhowl', 'spirit render', 'spirit render +3']) {
+    assert.deepEqual([...rewardInferredQuests([quest], { [name]: 1 })], ['Beastlord::Beastlord Test of Claw'])
+  }
+  assert.equal(rewardInferredQuests([quest], { 'spirit render': 0 }).size, 0)
+  assert.equal(rewardInferredQuests([quest], { windhowl: 1, 'spirit render': 1 }).size, 1)
+})
 
 const questOf = (r: (typeof SKY_QUEST_REWARDS)[number]): PoskyData['quests'][number] => {
   const q = POSKY.quests.find((x) => x.className === r.className && x.name === r.questName)
