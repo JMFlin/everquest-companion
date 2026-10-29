@@ -24,9 +24,7 @@
 //      is the higher authority the moment a future scrape writes real names.
 //   2. the reverse index over the catalog.
 // An item neither layer resolves gets an EMPTY list — the caller shows nothing rather than a
-// guess (law 1). That is 18 of the 128 items: the 15 Wind Runes (which posky already, correctly,
-// calls a random drop — there IS no kill target), plus Azarack Blood / Azarack Skin /
-// Large Sky Lapis, which no catalog page lists.
+// guess (law 1). Wind runes without a catalog dropper remain random drops, as posky states.
 //
 // SKY-ONLY IS A CORRECTNESS GATE, NOT A PREFERENCE. Item names collide across the game, and a
 // non-Sky page's loot list is evidence about a DIFFERENT item. Measured: restricting layer 2 to

@@ -239,18 +239,25 @@ test('a missing Wind Rune lands in the collective entry and never on a mob (AE5,
   assert.equal(model.randomDrop[0].shortfall, 1)
 })
 
-test('a missing item with no known dropper lands in the no-known-source list (AE6, real data)', () => {
-  // Large Sky Lapis: posky states a source in words, the catalog resolves nobody. (This was
-  // Azarack Blood until 2026-08-22, when the Protector of Sky page began listing it.)
+test('missing Large Sky Lapis lands under Eye of Veeshan on Island 8', () => {
   const row = QUESTS.flatMap((q) => q.items).find((it) => it.name === 'Large Sky Lapis')
   assert.ok(row, 'Large Sky Lapis is in the committed data')
   const droppers = skyDroppersFor(row.name, row.who)
-  assert.equal(droppers.length, 0, 'still unresolved in the committed catalog')
-  const q = quest({ name: 'Test of Azarack', items: [item({ name: row.name, where: row.where, who: row.who, droppers })] })
+  const q = quest({ name: 'Wizard Test of Preparation', items: [item({ name: row.name, where: row.where, who: row.who, droppers })] })
+  const model = skyTargets([q])
+  assert.deepEqual(model.mobs.map((target) => target.mob.name), ['Eye of Veeshan'])
+  assert.equal(model.mobs[0].island, 'Island 8')
+  assert.equal(model.mobs[0].items[0].name, row.name)
+  assert.deepEqual(model.unsourced, [])
+})
+
+test('a missing item with no known dropper lands in the no-known-source list (AE6)', () => {
+  const name = 'Sword of Nonexistence'
+  const q = quest({ name: 'Unknown source', items: [item({ name, droppers: skyDroppersFor(name) })] })
   const model = skyTargets([q])
   assert.equal(model.mobs.length, 0)
   assert.equal(model.unsourced.length, 1)
-  assert.equal(model.unsourced[0].name, row.name)
+  assert.equal(model.unsourced[0].name, name)
 })
 
 test('a real never-turned-in quest yields real kill targets from the committed catalog', () => {

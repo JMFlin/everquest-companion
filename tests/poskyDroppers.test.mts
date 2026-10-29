@@ -204,11 +204,14 @@ test('an item with no known dropper resolves EMPTY', () => {
   // exists, so none is invented. (Most runes behave this way; Ozah is the exception below.)
   assert.deepEqual(skyDroppersFor('Wind Rune Meda'), [])
   assert.deepEqual(skyDroppersFor('Wind Rune Azia'), [])
-  // No page in the catalog lists this one.
-  assert.deepEqual(skyDroppersFor('Large Sky Lapis'), [])
   // A name nothing in EverQuest has ever heard of.
   assert.deepEqual(skyDroppersFor('Sword of Nonexistence'), [])
   assert.deepEqual(skyDroppersFor(''), [])
+})
+
+test('Large Sky Lapis drops from Eye of Veeshan, like Hazy Opal', () => {
+  assert.deepEqual(names(skyDroppersFor('Large Sky Lapis')), ['Eye of Veeshan'])
+  assert.deepEqual(skyDroppersFor('Large Sky Lapis'), skyDroppersFor('Hazy Opal'))
 })
 
 test('the 2026-08-22 rescrape gave the Azarack pair (and Ozah) a real dropper', () => {
@@ -293,7 +296,7 @@ test('the tracker resolves a kill target for the great majority of its items', (
   assert.ok(resolved.length >= 109, `resolved: ${resolved.length} of ${items.length}`)
   // Every unresolved item is a wind rune or one of the gaps the catalog simply never lists.
   // (Azarack Blood/Skin left this set 2026-08-22 — Protector of Sky now lists them.)
-  const expectedGaps = new Set(['Bixie Stinger', 'Large Sky Lapis'])
+  const expectedGaps = new Set(['Bixie Stinger'])
   for (const n of unresolved) {
     assert.ok(
       n.toLowerCase().startsWith('wind rune') || expectedGaps.has(n),
