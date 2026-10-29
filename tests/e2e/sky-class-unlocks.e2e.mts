@@ -35,12 +35,10 @@
  *
  * Run: `npm run test:e2e -- sky-class-unlocks`.
  */
-import { mkdirSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Page } from 'playwright-core'
 import type { EqApi } from '../../src/preload/index'
 import posky from '../../src/renderer/src/data/eqlegends/posky.json'
-import { ARTIFACTS, buildIfStale, check, countOf, dumpArtifacts, failures, reportRun, settle } from './appHarness.mjs'
+import { buildIfStale, check, countOf, dumpArtifacts, failures, reportRun, settle } from './appHarness.mjs'
 import { mainWindow } from './appWindow.mjs'
 import { launchOnFixture, stageFixture, type FixtureLog } from './logFixture.mjs'
 
@@ -224,10 +222,9 @@ async function stepTurnInMovesCount(page: Page, log: FixtureLog, at: Date): Prom
   check('readiness is visible without claiming an unlock',
     (await rowText(page, 'beastlord')).includes('Ready to finish') && await sourceOf(page, 'beastlord') === '')
   check('the ready-to-finish class moves to the top', (await rowOrder(page))[0] === 'beastlord')
-  mkdirSync(ARTIFACTS, { recursive: true })
-  await page.screenshot({ path: join(ARTIFACTS, 'classes-ready-normal.png') })
+  await dumpArtifacts(page, 'classes-ready-normal')
   await page.setViewportSize({ width: 800, height: 800 })
-  await page.screenshot({ path: join(ARTIFACTS, 'classes-ready-narrow.png') })
+  await dumpArtifacts(page, 'classes-ready-narrow')
   const fits = await page.locator(rowOf('beastlord')).evaluate((el) => el.scrollWidth <= el.clientWidth)
   check('the ready class row fits at narrow width', fits)
   await page.setViewportSize({ width: 1280, height: 900 })
@@ -418,6 +415,9 @@ async function main(): Promise<void> {
     try {
       page = await mainWindow(launched.app)
       await page.waitForSelector(NAV_OVERVIEW, { timeout: 60_000 })
+      // The first-run notice overlaps the bottom class rows used by the pin checks.
+      await page.click('[data-testid="telemetry-notice-off"]')
+      await page.waitForSelector('[data-testid="telemetry-notice"]', { state: 'hidden' })
       if (!(await openClasses(page))) {
         throw new Error('never reached the Classes tab - nothing below can be asserted')
       }

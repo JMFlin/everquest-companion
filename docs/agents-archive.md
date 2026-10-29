@@ -3733,3 +3733,16 @@ your commit (6db8790 swept one; its wave's later commit completed it).
   settling") · 1 sighting (2026-08-13, JOS-294 worker six-spec sweep; green
   standalone and in the next full sweep) · NOT the resolved row's signature —
   unknown mechanism, watch for a second sighting before diagnosing.
+
+## Sky class readiness screenshot timeout, 2026-10-29
+
+`sky-class-unlocks.e2e` timed out after 30 seconds taking the narrow-window screenshot after all readiness assertions passed. One observed occurrence. Diagnostic captures now use `dumpArtifacts`, which records the DOM and bounds optional screenshot capture to three seconds. Readiness, narrow-width layout, turn-in, and navigation assertions remain required.
+
+The next run reached the pin checks, where the first-run telemetry notice intercepted clicks on the bottom class row. The spec now answers that notice before exercising the Classes tab.
+
+### Archived respawn-timer ledger entry
+
+  - `respawn-timers.e2e` · two clock reads made the learned gap 181 s where
+    four assertions spell `3m 00s` (1 sighting) · **RESOLVED 0572c77f** —
+    both deaths stamp off ONE captured `now`; the assertions were never
+    widened. Full history: docs/agents-archive.md.
