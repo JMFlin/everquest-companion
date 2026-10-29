@@ -51,6 +51,7 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import StarIcon from '@mui/icons-material/Star'
 import LinkIcon from '@mui/icons-material/Link'
 import { skyQuestPage, wikiPageUrl } from '@shared/wiki'
+import { skyQuestRewardItems } from '@shared/skyQuestRewards'
 // The turn-in badge and the manual counter (JOS-131), in their own file.
 import { TurnInBadge, TurnInCounter } from './TurnInControls'
 import type { QuestProgress } from './useProgress'
@@ -113,14 +114,15 @@ function SharingQuestChip({
   ambiguousNames: Set<string>
   onSelectQuest: (name: string) => void
 }): JSX.Element {
+  const rewards = skyQuestRewardItems(sq).map((reward) => reward.name).join(' + ')
   return (
     <Chip
       size="small"
       variant="outlined"
       color="info"
       data-testid="posky-shared-quest"
-      data-reward={sq.reward ?? ''}
-      title={sq.reward ? `Reward for ${sq.className} · ${sq.name}: ${sq.reward}` : undefined}
+      data-reward={rewards}
+      title={rewards ? `Reward for ${sq.className} · ${sq.name}: ${rewards}` : undefined}
       label={sharingQuestLabel(sq, ambiguousNames)}
       onClick={() => onSelectQuest(sq.name)}
       sx={{ height: 20, fontSize: 11 }}
@@ -207,7 +209,11 @@ function QuestSummaryRow({
                 quest's required items, so this tab knows no dropper for it — the card is the item
                 window plus whatever the item DB says it is for, which is the whole question here.
                 The scraped stat text is the fallback when the DB has no block of its own. */}
-            → <ItemNameLink name={q.reward} onOpenLoot={onOpenLoot} inSummary stats={q.rewardStats} />
+            {skyQuestRewardItems(q).map((reward) => (
+              <Box component="span" key={reward.name} sx={{ mr: 1 }}>
+                → <ItemNameLink name={reward.name} onOpenLoot={onOpenLoot} inSummary stats={reward.stats} />
+              </Box>
+            ))}
           </Typography>
         )}
         {q.giver && (
@@ -408,6 +414,7 @@ function QuestAccordionRow({
   anchored?: boolean
 }): JSX.Element {
   const wikiHref = wikiClassPage(q.className)
+  const rewards = skyQuestRewardItems(q)
   // Nothing MISSING is what silences the kill-target caption (JOS-131). It used to be "turned
   // in", which is now the opposite of the truth: handing the quest in spends its items, so a
   // re-run needs every one of those mobs again.
@@ -460,11 +467,12 @@ function QuestAccordionRow({
           onRecordTurnIn={() => onRecordTurnIn(q.key)}
           onUndoTurnIn={() => onUndoTurnIn(q.key)}
         />
-        {q.rewardStats && (
-          <Typography variant="caption" color="text.secondary" component="pre" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
-            {q.rewardStats}
+        {rewards.map((reward) => reward.stats && (
+          <Typography key={reward.name} variant="caption" color="text.secondary" component="pre" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
+            {rewards.length > 1 ? `${reward.name}\n` : ''}
+            {reward.stats}
           </Typography>
-        )}
+        ))}
         {shared.length > 0 && (
           <SharedItemsSection shared={shared} ambiguousNames={ambiguousNames} onSelectQuest={onSelectQuest} />
         )}

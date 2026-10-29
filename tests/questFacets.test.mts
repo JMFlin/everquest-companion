@@ -124,7 +124,7 @@ test('LAW 1 — a quest with no resolvable dropper names NO boss, and keeps the 
   assert.equal(bossless.length, 0, `boss-less quests: ${bossless.length}`)
   // The synthetic no-dropper quest: an island stated in words, an item no catalog page lists.
   const synthetic = {
-    items: [{ where: 'Island 2', droppers: skyDroppersFor('Large Sky Lapis') }]
+    items: [{ where: 'Island 2', droppers: skyDroppersFor('Sword of Nonexistence') }]
   }
   assert.deepEqual(questBosses(synthetic), [])
   assert.deepEqual(questIslands(synthetic), ['Island 2'])

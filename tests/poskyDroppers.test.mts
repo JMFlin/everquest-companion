@@ -10,8 +10,7 @@
 //   - a known Sky item names its boss, BY NAME (the whole point: posky's own `who` says "SL").
 //   - the SKY GATE. `Bixie Stinger` is the item-name collision that motivated it: the
 //     unrestricted reverse index answers with bixies in Kithicor Forest / Misty Thicket, which
-//     are a different item entirely. Sky-restricted, it resolves to nothing — correct, and the
-//     only item in the whole dataset the gate costs.
+//     are a different item entirely. Sky-restricted, it resolves only to Bazzt Zzzt.
 //   - layer 1 (an explicit dropper the scrape NAMES) outranks the index, and the nine strings
 //     the scrape actually carries resolve to no mob at all — which is why layer 2 does the work.
 //   - an item with no known dropper resolves EMPTY (law 1: never a guess).
@@ -115,6 +114,19 @@ test('an efreeti-chain item resolves EVERY boss that drops it, deterministically
   ])
 })
 
+test('all twenty guide-sourced Efreeti cycle items resolve all three bosses', () => {
+  const items = ['Brass Knuckles', 'Efreeti Battle Axe', 'Efreeti Belt', 'Efreeti Long Sword',
+    'Efreeti Mace', 'Efreeti Magi Staff', 'Efreeti Scimitar', 'Efreeti Standard', 'Efreeti Statuette',
+    'Efreeti War Axe', 'Efreeti War Bow', 'Efreeti War Club', 'Efreeti War Horn', 'Efreeti War Maul',
+    'Efreeti War Shield', 'Efreeti War Spear', 'Efreeti War Staff', 'Efreeti Wind Staff',
+    'Efreeti Zweihander', 'Large Sky Pearl']
+  for (const item of items) {
+    const bosses = names(skyDroppersFor(item))
+    for (const boss of ['Noble Dojorn', 'Overseer of Air', 'the Hand of Veeshan'])
+      assert.ok(bosses.includes(boss), `${boss}: ${item}`)
+  }
+})
+
 test('resolved droppers carry the level and zone the catalog states, verbatim', () => {
   const [dojorn] = skyDroppersFor('Efreeti War Maul')
   assert.equal(dojorn.name, 'Noble Dojorn')
@@ -138,24 +150,18 @@ test('isSkyMob matches the zone exactly — Skyfire/Skyshrine are NOT the Plane 
   assert.equal(isSkyMob({}), false)
 })
 
-test('Bixie Stinger: the unrestricted index answers with the WRONG item, the Sky gate refuses', () => {
-  // Same name, different item. The catalog's hits are ordinary overworld bixies.
+test('Bixie Stinger resolves only Bazzt Zzzt despite overworld name collisions', () => {
   const loose = droppersFor('Bixie Stinger', FULL_INDEX)
-  assert.ok(loose.length > 0, 'the unrestricted index does resolve this name')
-  assert.ok(
-    loose.every((m) => !isSkyMob(m)),
-    'and not one of its hits lives in the Plane of Sky'
-  )
-  // Sky-gated: nothing. The tracker shows posky's own "BZ" instead of a wrong mob.
-  assert.deepEqual(skyDroppersFor('Bixie Stinger'), [])
+  assert.ok(loose.some((m) => !isSkyMob(m)), 'the unrestricted index includes overworld bixies')
+  assert.deepEqual(names(skyDroppersFor('Bixie Stinger')), ['Bazzt Zzzt'])
 })
 
-test('the Sky gate costs exactly ONE distinct item across the whole dataset', () => {
+test('the Sky gate preserves every resolved quest item', () => {
   const items = new Set(QUESTS.flatMap((q) => q.items.map((i) => i.name)))
   const lost = [...items].filter(
     (n) => droppersFor(n, FULL_INDEX).length > 0 && skyDroppersFor(n).length === 0
   )
-  assert.deepEqual(lost, ['Bixie Stinger'])
+  assert.deepEqual(lost, [])
 })
 
 // =============================================================================
@@ -204,11 +210,14 @@ test('an item with no known dropper resolves EMPTY', () => {
   // exists, so none is invented. (Most runes behave this way; Ozah is the exception below.)
   assert.deepEqual(skyDroppersFor('Wind Rune Meda'), [])
   assert.deepEqual(skyDroppersFor('Wind Rune Azia'), [])
-  // No page in the catalog lists this one.
-  assert.deepEqual(skyDroppersFor('Large Sky Lapis'), [])
   // A name nothing in EverQuest has ever heard of.
   assert.deepEqual(skyDroppersFor('Sword of Nonexistence'), [])
   assert.deepEqual(skyDroppersFor(''), [])
+})
+
+test('Large Sky Lapis drops from Eye of Veeshan, like Hazy Opal', () => {
+  assert.deepEqual(names(skyDroppersFor('Large Sky Lapis')), ['Eye of Veeshan'])
+  assert.deepEqual(skyDroppersFor('Large Sky Lapis'), skyDroppersFor('Hazy Opal'))
 })
 
 test('the 2026-08-22 rescrape gave the Azarack pair (and Ozah) a real dropper', () => {
@@ -291,12 +300,10 @@ test('the tracker resolves a kill target for the great majority of its items', (
   const unresolved = items.filter((n) => skyDroppersFor(n).length === 0)
   assert.ok(items.length >= 128, `distinct items: ${items.length}`)
   assert.ok(resolved.length >= 109, `resolved: ${resolved.length} of ${items.length}`)
-  // Every unresolved item is a wind rune or one of the gaps the catalog simply never lists.
-  // (Azarack Blood/Skin left this set 2026-08-22 — Protector of Sky now lists them.)
-  const expectedGaps = new Set(['Bixie Stinger', 'Large Sky Lapis'])
+  // Random-drop wind runes have no specific kill target.
   for (const n of unresolved) {
     assert.ok(
-      n.toLowerCase().startsWith('wind rune') || expectedGaps.has(n),
+      n.toLowerCase().startsWith('wind rune'),
       `unexpected unresolved item: ${n}`
     )
   }

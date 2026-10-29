@@ -58,6 +58,10 @@ function searchQuest(q: PoskyQuest): SearchQuest & { className: string } {
 const ALL = QUESTS.map(searchQuest)
 const OPTIONS = facetOptions(ALL)
 
+test('Spirit Render finds the Beastlord quest that rewards both weapons', () => {
+  assert.deepEqual(filterByQuery(ALL, 'Spirit Render').map((q) => q.name), ['Beastlord Test of Claw'])
+})
+
 /** The three fields the box matched BEFORE JOS-207, spelled out so "this hit is new" is provable. */
 function matchedBefore(q: SearchQuest, needle: string): boolean {
   return (
@@ -73,6 +77,7 @@ const keys = (list: readonly (SearchQuest & { className: string })[]): string[] 
 /** A hand-built quest: the name, then `[itemName, where, ...droppers]` per required item. */
 function quest(name: string, ...items: [string, string, ...string[]][]): SearchQuest {
   return {
+    className: 'Bard',
     name,
     items: items.map(([itemName, where, ...droppers]) => ({
       name: itemName,
