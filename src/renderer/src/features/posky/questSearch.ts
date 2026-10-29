@@ -30,6 +30,7 @@
 // Pure + React-free, node-tested in `tests/questSearch.test.mts` against the committed data.
 
 import { questBosses, questIslands, type FacetItem, type FacetQuest } from './questFacets'
+import { skyQuestRewardItems } from '../../../../shared/skyQuestRewards'
 
 /**
  * A required-item row as the search reads it: the facet half (`where` + `droppers`, so
@@ -44,6 +45,7 @@ export interface SearchItem extends FacetItem {
 
 /** A quest as the search reads it. `QuestProgress` satisfies it structurally. */
 export interface SearchQuest extends FacetQuest {
+  className: string
   name: string
   /** the turn-in's reward, when the scrape states one; a quest without one matches on the rest */
   reward?: string
@@ -64,9 +66,7 @@ export interface SearchQuest extends FacetQuest {
 export function questMatchesQuery(q: SearchQuest, needle: string): boolean {
   if (!needle) return true
   if (q.name.toLowerCase().includes(needle)) return true
-  // `?? false` only so the expression is a boolean; a quest with no reward matched nothing here
-  // before either.
-  if (q.reward?.toLowerCase().includes(needle) ?? false) return true
+  if (skyQuestRewardItems(q).some((reward) => reward.name.toLowerCase().includes(needle))) return true
   if (q.items.some((i) => i.name.toLowerCase().includes(needle))) return true
   // JOS-207, through the facets' own derivations — see the header.
   if (questBosses(q).some((b) => b.toLowerCase().includes(needle))) return true

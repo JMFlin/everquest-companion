@@ -11,6 +11,7 @@ import { Box, Chip, Stack, Typography } from '@mui/material'
 import { QuestIgnoreButton } from '../favorites/QuestFlagButtons'
 import { TurnInBadge } from './TurnInControls'
 import type { QuestProgress } from './useProgress'
+import { skyQuestRewardItems } from '@shared/skyQuestRewards'
 
 // Every quest the user hid, in one flat compact list (no accordions — there is nothing to work on
 // here), each row carrying the same button that put it here, now reading "Stop ignoring".
@@ -51,7 +52,7 @@ export function IgnoredList({
             </Typography>
             {q.reward && (
               <Typography variant="caption" color="primary.main">
-                → {q.reward}
+                → {skyQuestRewardItems(q).map((reward) => reward.name).join(' + ')}
               </Typography>
             )}
             <Box sx={{ flexGrow: 1 }} />

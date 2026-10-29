@@ -196,6 +196,22 @@ async function stepAQuestItSaysNothingAboutIsUntouched(page: Page): Promise<void
   check('…and its undo is dead for the OLD reason, with the old words', u.title === 'Nothing to take back', u.title)
 }
 
+async function stepBeastlordRewards(page: Page): Promise<void> {
+  await page.fill(`${SEARCH} input`, 'Spirit Render')
+  const only = await settle(() => filteredCount(page), (n) => n === 1)
+  if (!check('Spirit Render search finds one quest', only === 1, String(only))) return
+  const summary = page.locator(SUMMARY)
+  check('Spirit Render search finds Beastlord Test of Claw', (await summary.innerText()).includes('Beastlord Test of Claw'))
+  const links = summary.locator('[data-testid="posky-item-link"]')
+  check('the weapon pair has separate item links', JSON.stringify(await links.allTextContents()) === JSON.stringify(['Windhowl', 'Spirit Render']))
+  await summary.click()
+  const stats = await page.locator(`${ROW} pre`).allTextContents()
+  check('each weapon stat block names its item', stats.length === 2 && stats[0].startsWith('Windhowl\n') && stats[1].startsWith('Spirit Render\n'))
+  await links.filter({ hasText: /^Spirit Render$/ }).click()
+  const title = await settle(() => page.locator('[data-testid="loot-detail-title"]').textContent(), (s) => s === 'Spirit Render')
+  check('Spirit Render opens its own item detail', title === 'Spirit Render', String(title))
+}
+
 async function main(): Promise<void> {
   buildIfStale()
 
@@ -210,6 +226,7 @@ async function main(): Promise<void> {
     await stepOnlyOneQuestIsVouchedFor(page)
     await stepTheRewardReadsAsATurnIn(page)
     await stepAQuestItSaysNothingAboutIsUntouched(page)
+    await stepBeastlordRewards(page)
     if (failures.length) await dumpArtifacts(page, 'sky-reward-inference-FAIL')
   } finally {
     await launched.close()

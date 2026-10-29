@@ -53,6 +53,7 @@
 import type { PoskyQuest } from '@shared/types'
 import { itemCountKey } from '../../lib/itemName'
 import { questKey } from './keys'
+import { skyQuestRewardItems } from '../../../../shared/skyQuestRewards'
 
 /**
  * Does the reward's own stat blob say it cannot be traded? Both spellings the scrape carries:
@@ -88,8 +89,9 @@ export function rewardInferredQuests(
     // A quest with no reward in the data never infers: that is missing data about a quest, not
     // a finished one (the `hasEveryItem` refusal, law 1). A tradeable reward never infers either
     // (the header's gate).
-    if (q.reward === undefined || !isUntradeable(q.rewardStats)) continue
-    if (held.has(itemCountKey(q.reward))) vouched.add(questKey(q))
+    if (skyQuestRewardItems(q).some((reward) =>
+      isUntradeable(reward.stats) && held.has(itemCountKey(reward.name))
+    )) vouched.add(questKey(q))
   }
   return vouched
 }
