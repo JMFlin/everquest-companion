@@ -39,7 +39,8 @@
 
 import type { ClassUnlockRecord } from '@shared/types'
 import type { QuestProgress } from './useProgress'
-import { everTurnedIn } from './questCompletion'
+import { everTurnedIn, hasEveryItem } from './questCompletion'
+import { itemCountKey } from '../../lib/itemName'
 
 /** Where a row's unlock reading came from. Absent on a row that is not unlocked. */
 export type UnlockSource = 'observed' | 'derived'
@@ -51,14 +52,31 @@ export interface ClassUnlockRow {
   turnedIn: number
   /** how many tests the class has. NOT a constant: Paladin has 4, Magician and Shadow Knight 7. */
   total: number
-  /** tests never turned in. The sort key, and the number the row leads with. */
+  /** Tests never turned in, including those already ready. */
   remaining: number
+  ready: number
+  readyToFinish: boolean
   /** can this character run the class as a primary? */
   unlocked: boolean
   /** which source said so; absent when `unlocked` is false */
   source?: UnlockSource
   /** epoch ms the LOG stated the unlock. Only ever set on an `observed` row. */
   unlockedAt?: number
+}
+
+function canFinish(quests: readonly QuestProgress[]): boolean {
+  if (quests.length === 0 || !quests.every(hasEveryItem)) return false
+  const requirements = new Map<string, { need: number; held: number }>()
+  for (const quest of quests) {
+    for (const item of quest.items) {
+      const key = itemCountKey(item.name)
+      const requirement = requirements.get(key) ?? { need: 0, held: item.held }
+      requirement.need += item.need
+      requirements.set(key, requirement)
+    }
+  }
+  // Individually ready quests can compete for the same drops and Wind Runes.
+  return [...requirements.values()].every((item) => item.held >= item.need)
 }
 
 /**
@@ -74,12 +92,11 @@ export function classUnlockRows(
   quests: readonly QuestProgress[],
   observed: readonly ClassUnlockRecord[]
 ): ClassUnlockRow[] {
-  const byClass = new Map<string, { turnedIn: number; total: number }>()
+  const byClass = new Map<string, QuestProgress[]>()
   for (const q of quests) {
-    const row = byClass.get(q.className) ?? { turnedIn: 0, total: 0 }
-    row.total += 1
-    if (everTurnedIn(q)) row.turnedIn += 1
-    byClass.set(q.className, row)
+    const classQuests = byClass.get(q.className) ?? []
+    classQuests.push(q)
+    byClass.set(q.className, classQuests)
   }
 
   // First sighting per class wins, matching the module's own dedupe — a re-scan re-reading the
@@ -91,13 +108,18 @@ export function classUnlockRows(
   }
 
   const rows: ClassUnlockRow[] = []
-  for (const [className, { turnedIn, total }] of byClass) {
+  for (const [className, classQuests] of byClass) {
+    const remaining = classQuests.filter((q) => !everTurnedIn(q))
+    const total = classQuests.length
+    const turnedIn = total - remaining.length
     const at = seenAt.get(className.toLowerCase())
     const row: ClassUnlockRow = {
       className,
       turnedIn,
       total,
       remaining: total - turnedIn,
+      ready: remaining.filter(hasEveryItem).length,
+      readyToFinish: canFinish(remaining),
       unlocked: false
     }
     if (at !== undefined) {
@@ -121,7 +143,7 @@ export function classUnlockRows(
 export type ClassPinRank = (row: ClassUnlockRow) => number
 
 /**
- * THE ORDER: fewest tests remaining first, then the class name.
+ * Ready-to-finish classes lead, then fewest tests remaining, then the class name.
  *
  * Closest-to-done is the whole point of the tab — the class you could finish next is the one
  * worth seeing — and it is TOTAL, bottoming out in the name, so the list never shuffles on a
@@ -146,7 +168,9 @@ export function orderClassUnlockRows(
   rank: ClassPinRank
 ): ClassUnlockRow[] {
   const sorted = [...rows].sort(
-    (a, b) => a.remaining - b.remaining || a.className.localeCompare(b.className)
+    (a, b) =>
+      Number(b.readyToFinish) - Number(a.readyToFinish) ||
+      a.remaining - b.remaining || a.className.localeCompare(b.className)
   )
   // A SECOND pass, like the quest list's: Array#sort is stable, so ties keep the first pass's
   // order and a starred class arrives at the top carrying the same closest-first order inside.

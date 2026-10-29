@@ -114,6 +114,7 @@ docs/agents-archive.md.
   row (spec · signature · occurrences · disposition), integrators append on
   sighting, and a flake at 3+ occurrences must have a fix ticket or chip —
   "green on re-run" is a report line, never a resolution. Known rows:
+  - `sky-class-unlocks.e2e`: docs/agents-archive.md.
   - `sky-filters.e2e` · remount race · **RESOLVED 9816cd34 (JOS-279)**
     (`tests/e2e/viewRemount.mts` holds the precondition); a SECOND distinct
     cause with the guard holding · 1 sighting 2026-08-13 · watch. Both rows
@@ -144,10 +145,7 @@ docs/agents-archive.md.
     40-spec sweep, JOS-260; 2026-08-13 sweep, JOS-279 — green standalone
     after, both) · load-sensitive persistence-on-close, unrelated to the
     change under test; report line.
-  - `respawn-timers.e2e` · two clock reads made the learned gap 181 s where
-    four assertions spell `3m 00s` (1 sighting) · **RESOLVED 0572c77f** —
-    both deaths stamp off ONE captured `now`; the assertions were never
-    widened. Full history: docs/agents-archive.md.
+  - `respawn-timers.e2e`: **RESOLVED 0572c77f**; history in docs/agents-archive.md.
   - MULTI-SPEC SWEEP · six specs die at once mid-click, "Target page … has
     been closed" · 1 sighting (2026-08-13 sweep, JOS-279; six green serially
     after, none in the next sweep) · a host/load event, not one spec's race —
