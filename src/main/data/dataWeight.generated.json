@@ -38,7 +38,7 @@
     },
     {
       "file": "src/renderer/src/data/eqlegends/mobs.json",
-      "bytes": 3080634,
+      "bytes": 3081203,
       "parseMs": 6.2,
       "heapMb": 4.6
     }

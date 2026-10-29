@@ -27,12 +27,9 @@
 // guess (law 1). Wind runes without a catalog dropper remain random drops, as posky states.
 //
 // SKY-ONLY IS A CORRECTNESS GATE, NOT A PREFERENCE. Item names collide across the game, and a
-// non-Sky page's loot list is evidence about a DIFFERENT item. Measured: restricting layer 2 to
-// mobs whose zones include Plane of Sky changes the resolved set by exactly ONE item —
-// `Bixie Stinger`, which the unrestricted index answers with "a bixie (Kithicor Forest)",
-// "a bixie drone" … while posky says Island 6 / BZ and the item's own wiki page opens with
-// "Were you looking for Bixie Stinger (Bixie God's Stinger)?". The gate costs one row and the
-// row it costs was WRONG. `buildDropperIndex` stays general so the test can pin that.
+// non-Sky page's loot list is evidence about a DIFFERENT item. `Bixie Stinger` also names
+// overworld bixie loot; the Sky gate keeps its Bazzt Zzzt source and excludes those collisions.
+// `buildDropperIndex` stays general so the test can pin that.
 //
 // The reverse index INDEPENDENTLY VALIDATES the scrape's abbreviations — each code maps onto one
 // catalog mob with no crossing (SL→The Spiroc Lord ×18, SotS→Sister of the Spire ×17,
