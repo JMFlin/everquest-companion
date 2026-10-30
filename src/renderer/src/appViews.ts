@@ -25,8 +25,7 @@ export type View =
   | 'wishlist'
   // Held motes + Wind Runes (currency-window scan) and the mote upgrade planner.
   | 'motes'
-  // Saved gear builds compared cell by cell against what you wear, with each piece's source. Fork-
-  // only and absent from TELEMETRY_VIEWS like 'spell' below: dwellView fails closed, no deploy needed.
+  // Saved gear builds compared cell by cell against what you wear, with each piece's source.
   | 'builds'
   | 'buffs'
   | 'timers'

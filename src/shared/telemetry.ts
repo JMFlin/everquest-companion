@@ -114,9 +114,10 @@ export const TELEMETRY_VIEWS = [
   // JOS-326 fills it, and how often anyone opens a placeholder is exactly the sort of thing the
   // dwell histogram is for.
   'wishlist',
-  // Fork-only Motes tab: the upstream ingest Lambda does not know it, so a batch carrying it is
-  // refused there. Accepted for a local build; opt out of usage analytics to avoid the drop.
+  // Fork-only Motes and Builds tabs: the upstream ingest Lambda does not know them, so a batch
+  // carrying one is refused there. Accepted for a local build; opt out of usage analytics to avoid the drop.
   'motes',
+  'builds',
   // The gear area's Character tab (JOS-45, released JOS-327). SAME CLOSED-ENUM DEPLOY ORDER as every
   // member added since JOS-119 — the ingest Lambda validates through this module, so the server has
   // to learn the value before a client that can emit it ships, or one dwell on this tab 400s the
@@ -167,8 +168,9 @@ export const TELEMETRY_OVERLAY_KINDS = [
   // carrying a value the server has not learned yet is refused WHOLE with a 400 the client classes
   // as permanent and drops. The server ships first.
   'conCard',
-  // Fork-only motes overlay — same upstream-refusal caveat as the Motes tab above.
-  'motes'
+  // Fork-only motes and builds overlays — same upstream-refusal caveat as the Motes tab above.
+  'motes',
+  'builds'
 ] as const
 export type TelemetryOverlayKind = (typeof TELEMETRY_OVERLAY_KINDS)[number]
 
@@ -301,13 +303,7 @@ export const TELEMETRY_OUTCOMES = ['ok', 'failed', 'queued'] as const
 export type TelemetryOutcome = (typeof TELEMETRY_OUTCOMES)[number]
 
 /** A COARSE class, never a message. Five values, and 'other' is where everything else lands. */
-export const TELEMETRY_FAILURE_CLASSES = [
-  'network',
-  'checksum',
-  'disk',
-  'timeout',
-  'other'
-] as const
+export const TELEMETRY_FAILURE_CLASSES = ['network', 'checksum', 'disk', 'timeout', 'other'] as const
 export type TelemetryFailureClass = (typeof TELEMETRY_FAILURE_CLASSES)[number]
 
 /** The auto-updater's three observable steps. */

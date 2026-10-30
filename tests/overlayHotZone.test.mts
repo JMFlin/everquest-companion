@@ -74,6 +74,7 @@ test('every kind gets the zone style its own renderer sensor implies', () => {
     buffs: 'window',
     debuffs: 'window',
     motes: 'window',
+    builds: 'window',
     // The three STRIPS have no hover sensor at all: their capture comes from their QUEUE, and they
     // never forwarded either. Growing one here would put a hit test on three windows that are
     // empty almost all of the time.

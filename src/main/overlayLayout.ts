@@ -514,5 +514,6 @@ export const OVERLAY_TITLE: Partial<Record<OverlayKind, string>> = {
   respawn: 'Respawn Timer Overlay',
   alertBanner: 'Alert Banner Overlay',
   conCard: 'Mob Card Overlay',
-  motes: 'Motes Overlay'
+  motes: 'Motes Overlay',
+  builds: 'Builds Overlay'
 }

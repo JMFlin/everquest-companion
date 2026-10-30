@@ -21,7 +21,7 @@ import {
 } from '../session'
 import { getProgress, setEqInstallDir, setInventory, setQuestTurnIns } from '../store'
 import { setItemOverride } from '../storeItemOverrides'
-import { getMainWindow, sendToMain } from '../windows'
+import { getMainWindow, getOverlayWindow, sendToMain } from '../windows'
 
 export function registerCharacterIpc(): void {
   ipcMain.handle(IPC.getCharacter, () => getActiveCharacter())
@@ -134,6 +134,7 @@ export function registerCharacterIpc(): void {
     // the age they had before the click. That is the reported symptom (a stale timestamp) wearing
     // the fix's own clothes, so both pushes go out here exactly as `loadInventoryNow` sends them.
     sendToMain(IPC.onInventoryReload, { path: res.path, loadedAt: res.loadedAt })
+    getOverlayWindow('builds')?.webContents.send(IPC.onInventoryReload)
     // Keep other views consistent (Plane of Sky derives held-item counts too).
     sendToMain(IPC.onProgress, progress)
     return { ok: true as const, path: res.path, loadedAt: res.loadedAt, progress }

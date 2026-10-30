@@ -21,6 +21,7 @@ import type { ToastPayload } from '../shared/toast'
 import type { AlertBannerPayload } from '../shared/alertBanner'
 import type { ConCardPayload } from '../shared/conCard'
 import { scanBridge } from './currency'
+import { buildsBridge } from './builds'
 
 export type { CombatSnapshot, SnapshotOpts, OverlayConfig, OverlayDrill, OverlayKind, MobKnowledge }
 
@@ -403,7 +404,15 @@ const overlayApi = {
   setCollapsed: (collapsed: boolean): void => ipcRenderer.send(IPC.overlaySetCollapsed, KIND, collapsed),
 
   /** The motes overlay's Scan button. */
-  ...scanBridge
+  ...scanBridge,
+
+  /** The builds overlay's read, and the dump re-read that makes it stale. */
+  ...buildsBridge,
+  onInventoryReload: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on(IPC.onInventoryReload, listener)
+    return () => ipcRenderer.removeListener(IPC.onInventoryReload, listener)
+  }
 }
 
 export type EqOverlayApi = typeof overlayApi
