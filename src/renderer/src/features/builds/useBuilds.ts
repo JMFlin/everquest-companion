@@ -6,7 +6,15 @@
 // changes — the caller passes whichever of those pushes its bridge has.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { compareBuild, wornFor, type Build, type BuildsPayload, type CompareRow, type WornDump } from '@shared/builds'
+import {
+  compareBuild,
+  compareKey,
+  wornFor,
+  type Build,
+  type BuildsPayload,
+  type CompareRow,
+  type WornDump
+} from '@shared/builds'
 
 const SELECTED_KEY = 'builds.selected'
 const TARGET_KEY = 'builds.compareWith'
@@ -21,6 +29,7 @@ export interface BuildsState {
   payload: BuildsPayload | null
   selected: Build | null
   select: (id: string) => void
+  /** the `compareKey` in effect: a loadout key, or `newest` for a dump no `/who` named */
   target: string
   setTarget: (target: string) => void
   /** the dump the selected build is compared against; null when that dump does not exist */
@@ -51,18 +60,24 @@ export function useBuilds(bridge: BuildsBridge): BuildsState {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
-  const select = useCallback((id: string) => {
-    localStorage.setItem(SELECTED_KEY, id)
-    setSelectedId(id)
-  }, [])
-
   const setTarget = useCallback((next: string) => {
     localStorage.setItem(TARGET_KEY, next)
     setTargetState(next)
   }, [])
 
+  // A newly picked build opens on its own loadout again.
+  const select = useCallback(
+    (id: string) => {
+      localStorage.setItem(SELECTED_KEY, id)
+      setSelectedId(id)
+      setTarget('auto')
+    },
+    [setTarget]
+  )
+
   const selected = payload?.builds.find((b) => b.id === selectedId) ?? payload?.builds[0] ?? null
-  const worn = payload === null || selected === null ? null : wornFor(payload, selected, target)
+  const key = payload === null || selected === null ? 'newest' : compareKey(payload, selected, target)
+  const worn = payload === null ? null : wornFor(payload, key)
   const rows = useMemo(() => (selected === null ? null : compareBuild(selected, worn?.cells ?? {})), [selected, worn])
-  return { payload, selected, select, target, setTarget, worn, reload, rows }
+  return { payload, selected, select, target: key, setTarget, worn, reload, rows }
 }

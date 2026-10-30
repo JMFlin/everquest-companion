@@ -130,14 +130,20 @@ export function loadoutKey(classes: readonly ClassAbbr[]): string {
 }
 
 /**
- * The dump a build is compared against under `target`: `auto` (its loadout's saved copy, or the
- * newest dump when it names no loadout), `newest` (the newest dump whatever its loadout), or a
- * saved loadout's `loadoutKey`. Null when that dump does not exist.
+ * What a build is compared against, as one picker value: a saved loadout's `loadoutKey` (each
+ * loadout's newest dump), or `newest` for the newest dump while no `/who` named its loadout.
+ * `target` is that value or `auto`: the build's own loadout when a dump of it is saved, else the
+ * newest dump.
  */
-export function wornFor(payload: BuildsPayload, build: Build, target: string): WornDump | null {
-  if (target === 'newest') return payload.worn
-  const key = target === 'auto' ? build.classes : target
-  return key === undefined ? payload.worn : (payload.loadouts[key] ?? null)
+export function compareKey(payload: BuildsPayload, build: Build, target: string): string {
+  const own = build.classes !== undefined && build.classes in payload.loadouts ? build.classes : 'newest'
+  const picked = target === 'auto' ? own : target
+  return picked === 'newest' ? (payload.worn?.classes ?? 'newest') : picked
+}
+
+/** The dump behind a `compareKey`; null when it does not exist. */
+export function wornFor(payload: BuildsPayload, key: string): WornDump | null {
+  return key === 'newest' ? payload.worn : (payload.loadouts[key] ?? null)
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {

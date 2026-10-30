@@ -28,7 +28,6 @@ import {
   differingCells,
   itemNameKey,
   sourceLines,
-  type Build,
   type BuildsPayload,
   type CompareRow,
   type ItemSource,
@@ -118,44 +117,30 @@ function dumpLabel(dump: WornDump): string {
   return `${classesOf(dump)} · dumped ${new Date(dump.loadedAt).toLocaleString()}`
 }
 
-function autoLabel(build: Build | null, newest: WornDump | null | undefined): string {
-  return build?.classes === undefined
-    ? `${classesOf(newest)} · auto (newest dump)`
-    : `${build.classes} · auto (this build's loadout)`
-}
-
-function newestLabel(newest: WornDump | null | undefined): string {
-  return newest
-    ? `${classesOf(newest)} · newest dump, ${new Date(newest.loadedAt).toLocaleString()}`
-    : 'newest dump (none yet)'
-}
-
 /**
- * Which dump to compare against: auto, or any saved loadout. Each loadout is listed once: the
- * newest dump, when a `/who` named its loadout, IS that loadout's saved copy and is marked newest
- * there. It gets its own entry only while its loadout is unknown.
+ * Which dump to compare against: one entry per loadout, each holding that loadout's newest dump,
+ * plus the newest dump on its own while no `/who` named its loadout.
  */
 function CompareWith({ state }: { state: BuildsState }): JSX.Element {
-  const { payload, selected, target, setTarget } = state
-  const loadouts = Object.values(payload?.loadouts ?? {})
+  const { payload, target, setTarget } = state
   const newest = payload?.worn
-  const newestKey = newest?.classes
-  const value = target === 'newest' && newestKey !== undefined ? newestKey : target
+  const keys = Object.keys(payload?.loadouts ?? {}).sort()
   return (
-    <FormControl size="small" sx={{ minWidth: 300 }}>
+    <FormControl size="small" sx={{ minWidth: 240 }}>
       <InputLabel id="build-compare-label">Compare with</InputLabel>
       <Select
         labelId="build-compare-label"
         label="Compare with"
-        value={value}
+        value={target}
         onChange={(e) => setTarget(e.target.value)}
         data-testid="build-compare"
       >
-        <MenuItem value="auto">{autoLabel(selected, payload?.worn)}</MenuItem>
-        {newestKey === undefined && <MenuItem value="newest">{newestLabel(newest)}</MenuItem>}
-        {loadouts.map((d) => (
-          <MenuItem key={d.classes} value={d.classes}>
-            {d.classes === newestKey ? newestLabel(d) : dumpLabel(d)}
+        {newest?.classes === undefined && (
+          <MenuItem value="newest">{newest ? 'loadout unknown · newest dump' : 'no dump yet'}</MenuItem>
+        )}
+        {keys.map((k) => (
+          <MenuItem key={k} value={k}>
+            {k === newest?.classes ? `${k} · newest dump` : k}
           </MenuItem>
         ))}
       </Select>
@@ -202,14 +187,20 @@ function Picker({ state }: { state: BuildsState }): JSX.Element {
   )
 }
 
-function missingDump(state: BuildsState): string {
-  const key = state.target === 'auto' ? state.selected?.classes : state.target === 'newest' ? undefined : state.target
-  return key === undefined
-    ? 'No inventory dump for this character yet: type /outputfile inventory in game.'
-    : `No saved dump for ${key} yet: in that loadout type /who, then /outputfile inventory.`
+/** Why the comparison is not against the build's own loadout, or there is none; null when it is fine. */
+function missingDump(state: BuildsState, payload: BuildsPayload): string | null {
+  const own = state.selected?.classes
+  if (state.worn === null) {
+    return state.target === 'newest'
+      ? 'No inventory dump for this character yet: type /outputfile inventory in game.'
+      : `No saved dump for ${state.target}.`
+  }
+  if (own === undefined || own in payload.loadouts) return null
+  return `No dump for ${own} yet, comparing with ${classesOf(state.worn)}: in that loadout type /who, then /outputfile inventory.`
 }
 
 function Notices({ state, payload }: { state: BuildsState; payload: BuildsPayload }): JSX.Element {
+  const missing = missingDump(state, payload)
   return (
     <>
       {payload.errors.map((e) => (
@@ -222,9 +213,9 @@ function Notices({ state, payload }: { state: BuildsState; payload: BuildsPayloa
           No builds yet. Import one with <code>{IMPORT_HINT}</code>, or put a build file in {payload.dir}.
         </Alert>
       )}
-      {state.worn === null && payload.builds.length > 0 && (
+      {missing !== null && payload.builds.length > 0 && (
         <Alert severity="info" data-testid="builds-missing-dump">
-          {missingDump(state)}
+          {missing}
         </Alert>
       )}
     </>
@@ -263,7 +254,7 @@ function BuildsView(): JSX.Element {
       <Notices state={state} payload={payload} />
       {rows !== null && <CompareTable rows={rows} payload={payload} />}
       <Typography variant="caption" color="text.secondary">
-        {state.worn !== null ? `Comparing with ${dumpLabel(state.worn)} — ` : ''}Build files: {payload.dir}
+        {state.worn !== null ? `Comparing with ${dumpLabel(state.worn)} · ` : ''}Build files: {payload.dir}
         {selected?.url !== undefined ? ` · imported from ${selected.url}` : ''}
       </Typography>
     </Stack>
