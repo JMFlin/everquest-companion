@@ -109,33 +109,53 @@ function Row({ row, source }: { row: CompareRow; source: ItemSource | null | und
   )
 }
 
+// Every label leads with the classes: that is what the owner scans the list for.
+function classesOf(dump: WornDump | null | undefined): string {
+  return dump?.classes ?? 'loadout unknown'
+}
+
 function dumpLabel(dump: WornDump): string {
-  return `${dump.classes ?? 'loadout unknown'}, dumped ${new Date(dump.loadedAt).toLocaleString()}`
+  return `${classesOf(dump)} · dumped ${new Date(dump.loadedAt).toLocaleString()}`
 }
 
-function autoLabel(build: Build | null): string {
-  return build?.classes === undefined ? 'Auto: newest dump' : `Auto: this build's loadout (${build.classes})`
+function autoLabel(build: Build | null, newest: WornDump | null | undefined): string {
+  return build?.classes === undefined
+    ? `${classesOf(newest)} · auto (newest dump)`
+    : `${build.classes} · auto (this build's loadout)`
 }
 
-/** Which dump to compare against: auto, the newest, or any saved loadout. */
+function newestLabel(newest: WornDump | null | undefined): string {
+  return newest
+    ? `${classesOf(newest)} · newest dump, ${new Date(newest.loadedAt).toLocaleString()}`
+    : 'newest dump (none yet)'
+}
+
+/**
+ * Which dump to compare against: auto, or any saved loadout. Each loadout is listed once: the
+ * newest dump, when a `/who` named its loadout, IS that loadout's saved copy and is marked newest
+ * there. It gets its own entry only while its loadout is unknown.
+ */
 function CompareWith({ state }: { state: BuildsState }): JSX.Element {
   const { payload, selected, target, setTarget } = state
   const loadouts = Object.values(payload?.loadouts ?? {})
+  const newest = payload?.worn
+  const newestKey = newest?.classes
+  const value = target === 'newest' && newestKey !== undefined ? newestKey : target
   return (
     <FormControl size="small" sx={{ minWidth: 300 }}>
       <InputLabel id="build-compare-label">Compare with</InputLabel>
       <Select
         labelId="build-compare-label"
         label="Compare with"
-        value={target}
+        value={value}
         onChange={(e) => setTarget(e.target.value)}
         data-testid="build-compare"
       >
-        <MenuItem value="auto">{autoLabel(selected)}</MenuItem>
-        <MenuItem value="newest">Newest dump{payload?.worn ? ` (${dumpLabel(payload.worn)})` : ''}</MenuItem>
+        <MenuItem value="auto">{autoLabel(selected, payload?.worn)}</MenuItem>
+        {newestKey === undefined && <MenuItem value="newest">{newestLabel(newest)}</MenuItem>}
         {loadouts.map((d) => (
           <MenuItem key={d.classes} value={d.classes}>
-            {dumpLabel(d)}
+            {d.classes === newestKey ? newestLabel(d) : dumpLabel(d)}
           </MenuItem>
         ))}
       </Select>
@@ -243,7 +263,7 @@ function BuildsView(): JSX.Element {
       <Notices state={state} payload={payload} />
       {rows !== null && <CompareTable rows={rows} payload={payload} />}
       <Typography variant="caption" color="text.secondary">
-        {state.worn !== null ? `Comparing with ${dumpLabel(state.worn)} · ` : ''}Build files: {payload.dir}
+        {state.worn !== null ? `Comparing with ${dumpLabel(state.worn)} — ` : ''}Build files: {payload.dir}
         {selected?.url !== undefined ? ` · imported from ${selected.url}` : ''}
       </Typography>
     </Stack>
