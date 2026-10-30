@@ -9,103 +9,18 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MOTES, planMotes, type MoteName, type SectionPlan, type Step } from '../src/shared/planner/motes'
-
-const MAX_XP = 1023
-const NAMES = MOTES.map((m) => m.name)
-const idx = (name: MoteName): number => NAMES.indexOf(name)
-const cum = (rank: number): number => 2 ** rank - 1
-const tierOf = (xp: number): number => Math.floor(Math.log2(xp + 1))
-const stateOf = (xp: number): { full: number; fraction: number } => {
-  const full = Math.min(10, tierOf(xp))
-  return { full, fraction: xp - cum(full) }
-}
-const spellValue = (counts: number[]): number => counts.reduce((s, c, i) => s + c * MOTES[i].spellXp, 0)
-const toCounts = (held: Partial<Record<MoteName, number>>): number[] => NAMES.map((n) => held[n] ?? 0)
-
-const OWNER: Partial<Record<MoteName, number>> = {
-  'Mote of Infinitesimal Potential': 21,
-  'Mote of Minor Potential': 29,
-  'Mote of Lesser Potential': 1,
-  'Mote of Potential': 10,
-  'Mote of Major Potential': 6,
-  'Mote of Greater Potential': 12,
-  'Mote of Superior Potential': 1,
-  'Mote of Grand Potential': 1,
-  'Mote of Infinite Potential': 1
-}
-
-/** Executes a spare-levelling step against `counts` and `spareXp` (both mutated); returns value spent. */
-function replayLevel(counts: number[], spareXp: number[], step: Extract<Step, { kind: 'level' }>, origin: number): number {
-  assert.equal(step.from, origin)
-  const i = idx(step.mote)
-  for (let n = 0; n < step.count; n++) {
-    assert.ok(counts[i] > 0, `level ${step.mote} overdraws`)
-    assert.ok(tierOf(spareXp[step.spare]) <= MOTES[i].itemCap, `${step.mote} applied to a spare above cap`)
-    counts[i]--
-    spareXp[step.spare] += MOTES[i].itemXp
-    assert.ok(tierOf(spareXp[step.spare]) <= 9, 'spare levelled to +10')
-  }
-  assert.deepEqual(step.after, stateOf(spareXp[step.spare]))
-  return step.count * MOTES[i].spellXp
-}
-
-/** Executes a section's steps against `counts` (mutated); returns final XP and value spent. */
-function replay(
-  counts: number[],
-  plan: SectionPlan,
-  kind: 'gear' | 'spell',
-  opts: { fraction?: number; spares?: number[]; condense?: boolean } = {}
-): { xp: number; value: number } {
-  let xp = cum(plan.from) + (opts.fraction ?? 0)
-  let value = 0
-  const spares = [...(opts.spares ?? [])]
-  const origin = [...spares]
-  const spareXp = spares.map(cum)
-  for (const step of plan.steps) {
-    if (step.kind === 'level') {
-      value += replayLevel(counts, spareXp, step, origin[step.spare])
-      spares[step.spare] = tierOf(spareXp[step.spare])
-      continue
-    }
-    if (step.kind === 'merge') {
-      assert.equal(kind, 'gear', 'spells never merge')
-      for (let n = 0; n < step.count; n++) {
-        const at = spares.indexOf(step.tier)
-        assert.ok(at >= 0, `merge +${step.tier} overdraws the spare copies`)
-        spares.splice(at, 1)
-        xp += 2 ** step.tier
-        assert.ok(xp <= MAX_XP, 'XP past 1023')
-      }
-      assert.deepEqual(step.after, stateOf(xp))
-      continue
-    }
-    const i = idx(step.mote)
-    if (step.kind === 'condense') {
-      assert.equal(kind, 'gear', 'spells never condense')
-      assert.ok(opts.condense, 'condensed without opting in')
-      assert.ok(i + 1 <= idx('Mote of Ascendant Potential'), 'cannot condense into Infinite')
-      assert.equal(step.into, NAMES[i + 1])
-      counts[i] -= 2 * step.pairs
-      assert.ok(counts[i] >= 0, `condense ${step.mote} overdraws`)
-      counts[i + 1] += step.pairs
-      continue
-    }
-    for (let n = 0; n < step.count; n++) {
-      assert.ok(counts[i] > 0, `apply ${step.mote} overdraws`)
-      if (kind === 'gear') assert.ok(tierOf(xp) <= MOTES[i].itemCap, `${step.mote} applied above cap`)
-      counts[i]--
-      xp += kind === 'gear' ? MOTES[i].itemXp : MOTES[i].spellXp
-      value += MOTES[i].spellXp
-      assert.ok(xp <= MAX_XP, 'XP past 1023')
-    }
-    assert.deepEqual(step.after, stateOf(xp))
-  }
-  const target = cum(plan.to)
-  assert.deepEqual(plan.reached, stateOf(xp))
-  assert.equal(plan.shortfallXp, Math.max(0, target - xp))
-  assert.equal(plan.overshootXp, Math.max(0, xp - target))
-  return { xp, value }
-}
+import {
+  MAX_XP,
+  NAMES,
+  OWNER,
+  bruteForceGear,
+  cum,
+  idx,
+  lexGreater,
+  replay,
+  spellValue,
+  toCounts
+} from './motePlannerFixture.mts'
 
 test("owner's inventory: spell 0->10 is an exact 1023 fill", () => {
   const plan = planMotes(OWNER, { spell: { from: 0, to: 10 } })
@@ -141,13 +56,21 @@ test('spell finishes with the smallest single overshooting mote', () => {
   const held = { 'Mote of Greater Potential': 1, 'Mote of Grand Potential': 1 }
   const spell = planMotes(held, { spell: { from: 0, to: 3 } }).spell as SectionPlan
   assert.deepEqual(spell.steps, [
-    { kind: 'apply', mote: 'Mote of Greater Potential', count: 1, after: { full: 5, fraction: 1 } }
+    {
+      kind: 'apply',
+      mote: 'Mote of Greater Potential',
+      count: 1,
+      after: { full: 5, fraction: 1 }
+    }
   ])
   assert.equal(spell.overshootXp, 25)
 })
 
 test('spell never passes 1023, even to finish', () => {
-  const held = { 'Mote of Infinite Potential': 2, 'Mote of Grand Potential': 1 }
+  const held = {
+    'Mote of Infinite Potential': 2,
+    'Mote of Grand Potential': 1
+  }
   const plan = planMotes(held, { spell: { from: 8, to: 10 } })
   const spell = plan.spell as SectionPlan
   assert.deepEqual(spell.reached, { full: 9, fraction: 384 })
@@ -159,7 +82,12 @@ test('gear prefers the cheaper path that still reaches the goal', () => {
   const held = { 'Mote of Infinitesimal Potential': 3, 'Mote of Potential': 2 }
   const gear = planMotes(held, { gear: { from: 0, to: 3 } }).gear as SectionPlan
   assert.deepEqual(gear.steps, [
-    { kind: 'apply', mote: 'Mote of Potential', count: 2, after: { full: 3, fraction: 1 } }
+    {
+      kind: 'apply',
+      mote: 'Mote of Potential',
+      count: 2,
+      after: { full: 3, fraction: 1 }
+    }
   ])
   assert.equal(gear.overshootXp, 1)
   replay(toCounts(held), gear, 'gear')
@@ -169,8 +97,18 @@ test('gear applies in ascending cap order (Infinitesimal only fits at tier 0)', 
   const held = { 'Mote of Infinitesimal Potential': 1, 'Mote of Potential': 1 }
   const gear = planMotes(held, { gear: { from: 0, to: 3 } }).gear as SectionPlan
   assert.deepEqual(gear.steps, [
-    { kind: 'apply', mote: 'Mote of Infinitesimal Potential', count: 1, after: { full: 1, fraction: 0 } },
-    { kind: 'apply', mote: 'Mote of Potential', count: 1, after: { full: 2, fraction: 2 } }
+    {
+      kind: 'apply',
+      mote: 'Mote of Infinitesimal Potential',
+      count: 1,
+      after: { full: 1, fraction: 0 }
+    },
+    {
+      kind: 'apply',
+      mote: 'Mote of Potential',
+      count: 1,
+      after: { full: 2, fraction: 2 }
+    }
   ])
   assert.equal(gear.shortfallXp, 2)
 })
@@ -180,9 +118,24 @@ test('gear condenses to unlock a higher cap', () => {
   const plan = planMotes(held, { gear: { from: 3, to: 5, condense: true } })
   const gear = plan.gear as SectionPlan
   assert.deepEqual(gear.steps, [
-    { kind: 'condense', mote: 'Mote of Potential', pairs: 1, into: 'Mote of Major Potential' },
-    { kind: 'apply', mote: 'Mote of Potential', count: 2, after: { full: 4, fraction: 0 } },
-    { kind: 'apply', mote: 'Mote of Major Potential', count: 1, after: { full: 4, fraction: 5 } }
+    {
+      kind: 'condense',
+      mote: 'Mote of Potential',
+      pairs: 1,
+      into: 'Mote of Major Potential'
+    },
+    {
+      kind: 'apply',
+      mote: 'Mote of Potential',
+      count: 2,
+      after: { full: 4, fraction: 0 }
+    },
+    {
+      kind: 'apply',
+      mote: 'Mote of Major Potential',
+      count: 1,
+      after: { full: 4, fraction: 5 }
+    }
   ])
   assert.equal(gear.shortfallXp, 11)
   assert.equal(plan.remaining['Mote of Potential'], 0)
@@ -194,7 +147,12 @@ test('gear never condenses unless asked', () => {
   const plan = planMotes(held, { gear: { from: 3, to: 5 } })
   const gear = plan.gear as SectionPlan
   assert.deepEqual(gear.steps, [
-    { kind: 'apply', mote: 'Mote of Potential', count: 2, after: { full: 4, fraction: 0 } }
+    {
+      kind: 'apply',
+      mote: 'Mote of Potential',
+      count: 2,
+      after: { full: 4, fraction: 0 }
+    }
   ])
   assert.equal(gear.shortfallXp, 16)
   assert.equal(plan.remaining['Mote of Potential'], 2)
@@ -208,9 +166,14 @@ test('gear never passes 1023', () => {
 })
 
 test('shared pool: gear then spell never double-books', () => {
-  const plan = planMotes(OWNER, { gear: { from: 0, to: 7, condense: true }, spell: { from: 0, to: 10 } })
+  const plan = planMotes(OWNER, {
+    gear: { from: 0, to: 7, condense: true },
+    spell: { from: 0, to: 10 }
+  })
   const counts = toCounts(OWNER)
-  const gear = replay(counts, plan.gear as SectionPlan, 'gear', { condense: true })
+  const gear = replay(counts, plan.gear as SectionPlan, 'gear', {
+    condense: true
+  })
   const spell = replay(counts, plan.spell as SectionPlan, 'spell')
   assert.deepEqual(counts, toCounts(plan.remaining))
   assert.equal(gear.value + spell.value + spellValue(counts), spellValue(toCounts(OWNER)))
@@ -224,15 +187,12 @@ test('selection ranges are validated', () => {
   assert.throws(() => planMotes({}, { spell: { from: 1.5, to: 3 } }))
 })
 
-const lexGreater = (a: number[], b: number[]): boolean => {
-  const d = a.findIndex((v, i) => v !== b[i])
-  return d >= 0 && a[d] > b[d]
-}
-
 test('hoards stay fast and plan as the clamped pool does', () => {
   // With every tier held past its own application limit nothing is worth condensing, so the
   // clamped pool is exactly each tier's application limit (cap window and 1023 horizon).
-  const limit = MOTES.map((m) => Math.min(Math.ceil((2 ** (m.itemCap + 1) - 1) / m.itemXp), Math.floor(MAX_XP / m.itemXp)))
+  const limit = MOTES.map((m) =>
+    Math.min(Math.ceil((2 ** (m.itemCap + 1) - 1) / m.itemXp), Math.floor(MAX_XP / m.itemXp))
+  )
   const clamped = planMotes(Object.fromEntries(NAMES.map((n, i) => [n, limit[i]])), { gear: { from: 0, to: 10 } })
   for (const each of [300, 1000]) {
     const held = Object.fromEntries(NAMES.map((n) => [n, each]))
@@ -246,56 +206,15 @@ test('hoards stay fast and plan as the clamped pool does', () => {
 })
 
 test('a hoard of the lowest tiers (the worst case: everything condenses) stays bounded', () => {
-  const held = { 'Mote of Infinitesimal Potential': 1000, 'Mote of Minor Potential': 1000 }
+  const held = {
+    'Mote of Infinitesimal Potential': 1000,
+    'Mote of Minor Potential': 1000
+  }
   const t0 = performance.now()
   const plan = planMotes(held, { gear: { from: 0, to: 10, condense: true } })
   assert.ok(performance.now() - t0 < 1000)
   replay(toCounts(held), plan.gear as SectionPlan, 'gear', { condense: true })
 })
-
-/** Best (reachedKey, -value, -overshoot) over every valid operation sequence, merges anywhere. */
-function bruteForceGear(
-  counts: number[],
-  from: number,
-  to: number,
-  opts: { fraction?: number; spares?: number[]; condense?: boolean; level?: boolean } = {}
-): [number, number, number] {
-  const target = cum(to)
-  let best: [number, number, number] = [-1, 0, 0]
-  const seen = new Set<string>()
-  const visit = (c: number[], xp: number, value: number, sp: number[]): void => {
-    const key = `${c.join(',')}|${xp}|${sp.join(',')}`
-    if (seen.has(key)) return
-    seen.add(key)
-    const score: [number, number, number] = [Math.min(xp, target), -value, -Math.max(0, xp - target)]
-    if (lexGreater(score, best)) best = score
-    sp.forEach((s, j) => {
-      if (xp + 2 ** tierOf(s) <= MAX_XP) visit(c, xp + 2 ** tierOf(s), value, sp.filter((_, k) => k !== j))
-    })
-    for (let i = 0; i < c.length; i++) {
-      if (c[i] === 0) continue
-      sp.forEach((s, j) => {
-        if (!opts.level || tierOf(s) > MOTES[i].itemCap || tierOf(s + MOTES[i].itemXp) > 9) return
-        const n = [...c]
-        n[i]--
-        visit(n, xp, value + MOTES[i].spellXp, sp.map((v, k) => (k === j ? v + MOTES[i].itemXp : v)).sort((a, b) => a - b))
-      })
-      if (tierOf(xp) <= MOTES[i].itemCap && xp + MOTES[i].itemXp <= MAX_XP) {
-        const n = [...c]
-        n[i]--
-        visit(n, xp + MOTES[i].itemXp, value + MOTES[i].spellXp, sp)
-      }
-      if (opts.condense && c[i] >= 2 && i + 1 <= idx('Mote of Ascendant Potential')) {
-        const n = [...c]
-        n[i] -= 2
-        n[i + 1]++
-        visit(n, xp, value, sp)
-      }
-    }
-  }
-  visit(counts, cum(from) + (opts.fraction ?? 0), 0, (opts.spares ?? []).map(cum).sort((a, b) => a - b))
-  return best
-}
 
 test('gear DP matches exhaustive search on random small pools', () => {
   let seed = 12345
@@ -310,7 +229,9 @@ test('gear DP matches exhaustive search on random small pools', () => {
     const to = from + 1 + rand(3)
     const condense = trial % 2 === 0
     const plan = planMotes(held, { gear: { from, to, condense } })
-    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', { condense })
+    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', {
+      condense
+    })
     const target = cum(to)
     const expected = bruteForceGear(toCounts(held), from, to, { condense })
     assert.deepEqual(
@@ -344,7 +265,11 @@ test('spare copies fill the gap motes leave, and are merged after every capped m
 
 test('banked progress counts: +4 at 5/16 needs 11 more XP to reach +5', () => {
   // Major (5) + Greater (6) is exactly 11; the Infinite would also do it, at far more spell value.
-  const held = { 'Mote of Major Potential': 1, 'Mote of Greater Potential': 1, 'Mote of Infinite Potential': 1 }
+  const held = {
+    'Mote of Major Potential': 1,
+    'Mote of Greater Potential': 1,
+    'Mote of Infinite Potential': 1
+  }
   const plan = planMotes(held, { gear: { from: 4, to: 5, fraction: 5 } })
   const gear = plan.gear as SectionPlan
   replay(toCounts(held), gear, 'gear', { fraction: 5 })
@@ -373,12 +298,25 @@ test('gear with spare copies and banked progress never does worse than merging t
     const fraction = rand(2 ** from)
     const spares = Array.from({ length: rand(4) }, () => rand(7))
     const condense = trial % 2 === 0
-    const plan = planMotes(held, { gear: { from, to, fraction, spares, condense } })
-    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', { fraction, spares, condense })
+    const plan = planMotes(held, {
+      gear: { from, to, fraction, spares, condense }
+    })
+    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', {
+      fraction,
+      spares,
+      condense
+    })
     const target = cum(to)
     const score = [Math.min(got.xp, target), -got.value, -Math.max(0, got.xp - target)]
     assert.ok(
-      !lexGreater(bruteForceGear(toCounts(held), from, to, { fraction, spares, condense }), score),
+      !lexGreater(
+        bruteForceGear(toCounts(held), from, to, {
+          fraction,
+          spares,
+          condense
+        }),
+        score
+      ),
       `trial ${trial}: ${JSON.stringify(held)} ${from}(+${fraction})->${to} spares ${JSON.stringify(spares)} condense ${condense}`
     )
   }
@@ -388,7 +326,10 @@ test('spell steps are listed smallest mote first, like gear', () => {
   const spell = planMotes(OWNER, { spell: { from: 0, to: 10 } }).spell as SectionPlan
   replay(toCounts(OWNER), spell, 'spell')
   const order = spell.steps.map((s) => (s.kind === 'apply' ? idx(s.mote) : -1))
-  assert.deepEqual(order, [...order].sort((a, b) => a - b))
+  assert.deepEqual(
+    order,
+    [...order].sort((a, b) => a - b)
+  )
   assert.equal(spell.steps[0].kind === 'apply' && spell.steps[0].mote, 'Mote of Infinitesimal Potential')
 })
 
@@ -409,37 +350,22 @@ test('spell banked progress counts: rank 4 at 5/16 needs 11 more XP to reach ran
   )
 })
 
-test('gear DP levelling one spare matches exhaustive search', () => {
-  let seed = 4242
-  const rand = (n: number): number => {
-    seed = (seed * 1103515245 + 12345) % 2 ** 31
-    return seed % n
-  }
-  for (let trial = 0; trial < 150; trial++) {
-    const held: Partial<Record<MoteName, number>> = {}
-    for (let i = 0; i < 6; i++) if (rand(3)) held[NAMES[i]] = rand(4)
-    const [from, fraction, spares, condense] = [rand(6), 0, [rand(4)], trial % 2 === 0]
-    const to = from + 1 + rand(3)
-    const plan = planMotes(held, { gear: { from, to, fraction, spares, condense } })
-    const got = replay(toCounts(held), plan.gear as SectionPlan, 'gear', { fraction, spares, condense })
-    assert.deepEqual(
-      [Math.min(got.xp, cum(to)), -got.value, -Math.max(0, got.xp - cum(to))],
-      bruteForceGear(toCounts(held), from, to, { fraction, spares, condense, level: true }),
-      `trial ${trial}: ${JSON.stringify(held)} ${from}->${to} spare +${spares[0]} condense ${condense}`
-    )
-  }
-})
-
 test("owner's +5 -> +8 with a spare +0 levels the spare on low motes and keeps Greaters for the piece", () => {
   const gear = planMotes(OWNER, { gear: { from: 5, to: 8, spares: [0] } }).gear as SectionPlan
   replay(toCounts(OWNER), gear, 'gear', { spares: [0] })
-  const has = (kind: Step['kind'], mote: MoteName): boolean => gear.steps.some((s) => s.kind === kind && 'mote' in s && s.mote === mote)
+  const has = (kind: Step['kind'], mote: MoteName): boolean =>
+    gear.steps.some((s) => s.kind === kind && 'mote' in s && s.mote === mote)
   assert.ok(has('level', 'Mote of Infinitesimal Potential') && has('apply', 'Mote of Greater Potential'))
 })
 
-test('several spares level one at a time and stay fast', () => {
+test('several spares stay fast', () => {
   const t0 = performance.now()
-  const plan = planMotes(OWNER, { gear: { from: 0, to: 10, spares: [0, 0, 3, 5], condense: true } })
+  const plan = planMotes(OWNER, {
+    gear: { from: 0, to: 10, spares: [0, 0, 3, 5], condense: true }
+  })
   assert.ok(performance.now() - t0 < 2000)
-  replay(toCounts(OWNER), plan.gear as SectionPlan, 'gear', { spares: [0, 0, 3, 5], condense: true })
+  replay(toCounts(OWNER), plan.gear as SectionPlan, 'gear', {
+    spares: [0, 0, 3, 5],
+    condense: true
+  })
 })
