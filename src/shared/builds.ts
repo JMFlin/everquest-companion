@@ -19,6 +19,12 @@
 // the kinds the build names are compared — a build that says nothing about a socket has no opinion
 // about it.
 //
+// A BUILD MAY NAME ITS CLASS LOADOUT (`classes`, e.g. "PAL/MNK/ENC"). Gear differs per loadout,
+// so such a build is compared against the saved dump of THAT loadout (main/wornLoadouts.ts files
+// each dump under the loadout a `/who` beside it stated), never against whatever was dumped last.
+// Loadouts match as class SETS: MNK/PAL/ENC is PAL/MNK/ENC. A build with no `classes` compares
+// against the newest dump.
+//
 // SOURCES ARE NOT STORED HERE. Where an item drops is the committed item corpus's fact; main
 // resolves it per read (`BuildsPayload.sources`), so a corpus correction reaches every build.
 //
@@ -26,6 +32,7 @@
 
 import { parseItemName, type InventoryDump } from './outputs/inventory'
 import { equippedEntries } from './planner/inventorySlots'
+import { isClassAbbr, MAX_COMBO_SLOTS, type ClassAbbr } from './classCombo'
 import { PLAN_SLOTS, type PlanSlotId } from './planner/types'
 
 export type ExaltKind = 'focus' | 'click' | 'worn' | 'proc'
@@ -49,6 +56,8 @@ export interface Build {
   name: string
   /** where the build was imported from, when it was */
   url?: string
+  /** the loadout this build is for, as a `loadoutKey`; absent = compare against the newest dump */
+  classes?: string
   slots: Partial<Record<PlanSlotId, BuildItem>>
 }
 
@@ -60,6 +69,14 @@ export interface WornItem {
 }
 
 export type WornCells = Partial<Record<PlanSlotId, WornItem>>
+
+/** Worn cells read off one dump; `classes` (a `loadoutKey`) when a `/who` named its loadout. */
+export interface WornDump {
+  /** the dump file's mtime, ISO */
+  loadedAt: string
+  classes?: string
+  cells: WornCells
+}
 
 /** Where an item comes from, per the committed corpus. `null` in the payload = the corpus has no row. */
 export interface ItemSource {
@@ -77,10 +94,13 @@ export interface BuildsPayload {
   /** keyed by `itemKey(name)` (lowercased base name), for every item any build names */
   sources: Record<string, ItemSource | null>
   /** the active character's newest dump, or null when the command has never been run */
-  worn: { path: string; loadedAt: string; cells: WornCells } | null
+  worn: WornDump | null
+  /** the active character's saved dump per loadout, keyed by `loadoutKey` */
+  loadouts: Record<string, WornDump>
 }
 
 const PLAN_SLOT_SET: ReadonlySet<string> = new Set<string>(PLAN_SLOTS)
+const FILE_FIELDS: ReadonlySet<string> = new Set(['name', 'url', 'classes', 'slots'])
 const EXALT_KIND_SET: ReadonlySet<string> = new Set<string>(EXALT_KINDS)
 
 /** A name as the comparison and the corpus key see it: base name, case folded. */
@@ -91,6 +111,33 @@ export function itemNameKey(name: string): string {
 /** The display base name: ` +N`, `*` and ` (Exaltation)` stripped. */
 function baseName(name: string): string {
   return parseItemName(name.trim()).base
+}
+
+/** "PAL/MNK/ENC" → its classes, validated: 1–3 distinct `/who` class codes. Throws naming `what`. */
+export function parseLoadoutClasses(raw: string, what: string): ClassAbbr[] {
+  const parts = raw.split('/').map((p) => p.trim().toUpperCase())
+  const bad = parts.find((p) => !isClassAbbr(p))
+  if (bad !== undefined) throw new Error(`${what}: unknown class "${bad}"`)
+  if (parts.length > MAX_COMBO_SLOTS || new Set(parts).size !== parts.length) {
+    throw new Error(`${what}: expected 1-${MAX_COMBO_SLOTS} distinct classes like "PAL/MNK/ENC"`)
+  }
+  return parts as ClassAbbr[]
+}
+
+/** The order-free identity of a loadout: its classes sorted, "/"-joined (MNK/PAL/ENC → ENC/MNK/PAL). */
+export function loadoutKey(classes: readonly ClassAbbr[]): string {
+  return [...classes].sort().join('/')
+}
+
+/**
+ * The dump a build is compared against under `target`: `auto` (its loadout's saved copy, or the
+ * newest dump when it names no loadout), `newest` (the newest dump whatever its loadout), or a
+ * saved loadout's `loadoutKey`. Null when that dump does not exist.
+ */
+export function wornFor(payload: BuildsPayload, build: Build, target: string): WornDump | null {
+  if (target === 'newest') return payload.worn
+  const key = target === 'auto' ? build.classes : target
+  return key === undefined ? payload.worn : (payload.loadouts[key] ?? null)
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -110,10 +157,13 @@ function nonEmptyString(v: unknown, what: string): string {
 export function parseBuildFile(id: string, raw: unknown): Build {
   if (!isRecord(raw)) throw new Error('a build file must be a JSON object')
   for (const key of Object.keys(raw)) {
-    if (key !== 'name' && key !== 'url' && key !== 'slots') throw new Error(`unknown field "${key}"`)
+    if (!FILE_FIELDS.has(key)) throw new Error(`unknown field "${key}"`)
   }
   const build: Build = { id, name: raw.name === undefined ? id : nonEmptyString(raw.name, 'name'), slots: {} }
   if (raw.url !== undefined) build.url = nonEmptyString(raw.url, 'url')
+  if (raw.classes !== undefined) {
+    build.classes = loadoutKey(parseLoadoutClasses(nonEmptyString(raw.classes, 'classes'), 'classes'))
+  }
   if (!isRecord(raw.slots)) throw new Error('"slots" must be an object keyed by cell')
   for (const [cell, value] of Object.entries(raw.slots)) {
     if (!PLAN_SLOT_SET.has(cell)) throw new Error(`unknown cell "${cell}" (expected one of ${PLAN_SLOTS.join(', ')})`)
@@ -132,7 +182,8 @@ function parseBuildItem(at: string, value: unknown): BuildItem {
   if (!isRecord(value.exaltations)) throw new Error(`${at}.exaltations must be an object`)
   const ex: Exaltations = {}
   for (const [kind, donor] of Object.entries(value.exaltations)) {
-    if (!EXALT_KIND_SET.has(kind)) throw new Error(`${at}.exaltations: unknown kind "${kind}" (expected ${EXALT_KINDS.join(', ')})`)
+    if (!EXALT_KIND_SET.has(kind))
+      throw new Error(`${at}.exaltations: unknown kind "${kind}" (expected ${EXALT_KINDS.join(', ')})`)
     ex[kind as ExaltKind] = baseName(nonEmptyString(donor, `${at}.exaltations.${kind}`))
   }
   item.exaltations = ex
@@ -187,7 +238,11 @@ export function compareBuild(build: Build, worn: WornCells): CompareRow[] {
       const want = item.exaltations?.[kind]
       if (want === undefined) continue
       const have = on?.exaltations[kind]
-      const row: ExaltCompare = { kind, build: want, differs: have === undefined || itemNameKey(have) !== itemNameKey(want) }
+      const row: ExaltCompare = {
+        kind,
+        build: want,
+        differs: have === undefined || itemNameKey(have) !== itemNameKey(want)
+      }
       if (have !== undefined) row.worn = have
       exaltations.push(row)
     }

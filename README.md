@@ -34,7 +34,9 @@ off logging, the app simply has nothing to show.
   to apply, wasting the least XP. The scan is a screenshot of the game window read by local OCR —
   nothing leaves your machine.
 - **Builds** — save gear builds (import a loadoutlegends.com character, or write a small JSON
-  file) and compare one against what you wear, from your latest `/outputfile inventory`. Cells
+  file) and compare one against what you wear. Each dump is saved per class loadout when a `/who`
+  runs beside it (macro: `/who`, then `/outputfile inventory`), and a build compares against its
+  own loadout's dump by default, or any saved one you pick. Cells
   where the item or a named exaltation differs are yellow, and every build piece shows where it
   drops or which quest gives it. The Builds overlay lists just the cells you still need. Import:
   `npx tsx scripts/import-build.mts <loadoutlegends character URL>`. Details:

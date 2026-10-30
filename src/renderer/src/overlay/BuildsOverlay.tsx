@@ -47,7 +47,7 @@ function Line({ row, source }: { row: CompareRow; source: ItemSource | null | un
 }
 
 function Body({ state }: { state: BuildsState }): JSX.Element {
-  const { payload, selected, select, rows } = state
+  const { payload, selected, select, worn, rows } = state
   const differing = rows === null ? [] : differingRows(rows)
   return (
     <>
@@ -74,8 +74,8 @@ function Body({ state }: { state: BuildsState }): JSX.Element {
           ))}
         </select>
       )}
-      {payload?.worn === null && (
-        <div style={{ color: DIM, marginTop: 4 }}>No inventory dump yet: /outputfile inventory</div>
+      {payload !== null && worn === null && (
+        <div style={{ color: DIM, marginTop: 4 }}>No dump for this loadout yet: /who, then /outputfile inventory</div>
       )}
       {rows !== null && differing.length === 0 && (
         <div style={{ color: '#8fd18f', marginTop: 6 }}>You are wearing this build.</div>

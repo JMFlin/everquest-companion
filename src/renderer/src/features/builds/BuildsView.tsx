@@ -1,6 +1,7 @@
 // BuildsView — pick a saved build, see it cell by cell beside what you wear, and where each piece
 // comes from. A cell whose item differs from yours is yellow, and so is an exaltation the build
-// names that your socket does not hold. Everything decided about the comparison lives in
+// names that your socket does not hold. The second dropdown picks which saved dump the build is
+// compared against: by default the build's own class loadout. Everything decided about the comparison lives in
 // @shared/builds; this file only draws it.
 
 import type { JSX } from 'react'
@@ -23,7 +24,16 @@ import {
   Typography
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
-import { differingCells, itemNameKey, sourceLines, type BuildsPayload, type CompareRow, type ItemSource } from '@shared/builds'
+import {
+  differingCells,
+  itemNameKey,
+  sourceLines,
+  type Build,
+  type BuildsPayload,
+  type CompareRow,
+  type ItemSource,
+  type WornDump
+} from '@shared/builds'
 import { planSlotLabel } from '@shared/planner/types'
 import type { View } from '../../appViews'
 import { useBuilds, type BuildsBridge, type BuildsState } from './useBuilds'
@@ -99,6 +109,40 @@ function Row({ row, source }: { row: CompareRow; source: ItemSource | null | und
   )
 }
 
+function dumpLabel(dump: WornDump): string {
+  return `${dump.classes ?? 'loadout unknown'}, dumped ${new Date(dump.loadedAt).toLocaleString()}`
+}
+
+function autoLabel(build: Build | null): string {
+  return build?.classes === undefined ? 'Auto: newest dump' : `Auto: this build's loadout (${build.classes})`
+}
+
+/** Which dump to compare against: auto, the newest, or any saved loadout. */
+function CompareWith({ state }: { state: BuildsState }): JSX.Element {
+  const { payload, selected, target, setTarget } = state
+  const loadouts = Object.values(payload?.loadouts ?? {})
+  return (
+    <FormControl size="small" sx={{ minWidth: 300 }}>
+      <InputLabel id="build-compare-label">Compare with</InputLabel>
+      <Select
+        labelId="build-compare-label"
+        label="Compare with"
+        value={target}
+        onChange={(e) => setTarget(e.target.value)}
+        data-testid="build-compare"
+      >
+        <MenuItem value="auto">{autoLabel(selected)}</MenuItem>
+        <MenuItem value="newest">Newest dump{payload?.worn ? ` (${dumpLabel(payload.worn)})` : ''}</MenuItem>
+        {loadouts.map((d) => (
+          <MenuItem key={d.classes} value={d.classes}>
+            {dumpLabel(d)}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+  )
+}
+
 function Picker({ state }: { state: BuildsState }): JSX.Element {
   const { payload, selected, select, reload, rows } = state
   const builds = payload?.builds ?? []
@@ -121,11 +165,16 @@ function Picker({ state }: { state: BuildsState }): JSX.Element {
           ))}
         </Select>
       </FormControl>
+      <CompareWith state={state} />
       <Button variant="outlined" size="small" onClick={reload} data-testid="builds-reload">
         Reload
       </Button>
       {rows !== null && (
-        <Typography variant="body2" color={differing > 0 ? 'warning.main' : 'success.main'} data-testid="builds-summary">
+        <Typography
+          variant="body2"
+          color={differing > 0 ? 'warning.main' : 'success.main'}
+          data-testid="builds-summary"
+        >
           {differing === 0 ? 'You are wearing this build.' : `${differing} of ${rows.length} cells differ`}
         </Typography>
       )}
@@ -133,7 +182,14 @@ function Picker({ state }: { state: BuildsState }): JSX.Element {
   )
 }
 
-function Notices({ payload }: { payload: BuildsPayload }): JSX.Element {
+function missingDump(state: BuildsState): string {
+  const key = state.target === 'auto' ? state.selected?.classes : state.target === 'newest' ? undefined : state.target
+  return key === undefined
+    ? 'No inventory dump for this character yet: type /outputfile inventory in game.'
+    : `No saved dump for ${key} yet: in that loadout type /who, then /outputfile inventory.`
+}
+
+function Notices({ state, payload }: { state: BuildsState; payload: BuildsPayload }): JSX.Element {
   return (
     <>
       {payload.errors.map((e) => (
@@ -146,8 +202,10 @@ function Notices({ payload }: { payload: BuildsPayload }): JSX.Element {
           No builds yet. Import one with <code>{IMPORT_HINT}</code>, or put a build file in {payload.dir}.
         </Alert>
       )}
-      {payload.worn === null && payload.builds.length > 0 && (
-        <Alert severity="info">No inventory dump for this character yet: type /outputfile inventory in game.</Alert>
+      {state.worn === null && payload.builds.length > 0 && (
+        <Alert severity="info" data-testid="builds-missing-dump">
+          {missingDump(state)}
+        </Alert>
       )}
     </>
   )
@@ -182,10 +240,10 @@ function BuildsView(): JSX.Element {
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
       <Picker state={state} />
-      <Notices payload={payload} />
+      <Notices state={state} payload={payload} />
       {rows !== null && <CompareTable rows={rows} payload={payload} />}
       <Typography variant="caption" color="text.secondary">
-        Build files: {payload.dir}
+        {state.worn !== null ? `Comparing with ${dumpLabel(state.worn)} · ` : ''}Build files: {payload.dir}
         {selected?.url !== undefined ? ` · imported from ${selected.url}` : ''}
       </Typography>
     </Stack>

@@ -6,8 +6,9 @@
  * overlay's list. The comparison itself is unit-tested (tests/builds.test.mts); this spec pins that
  * the pieces meet:
  *
- *   * Larlen's imported build (the committed loadoutlegends page, through the real importer) against
- *     the dev character's committed dump: SHOULDERS is the same item (Pauldrons of Power) and its
+ *   * Larlen's imported build names its loadout (WIZ/BRD/ENC) and no dump of that loadout was saved,
+ *     so the tab says so instead of comparing another loadout's gear. Compare with → Newest dump
+ *     then compares it against the dev character's committed dump: SHOULDERS is the same item (Pauldrons of Power) and its
  *     row is NOT yellow; FACE differs (Darkbrood Mask vs Polished Mithril Mask) and IS.
  *   * a build cell shows where its item comes from, out of the committed corpus.
  *   * a broken build file is listed with its reason, not skipped.
@@ -63,14 +64,26 @@ async function stepLarlen(page: Page): Promise<void> {
   await page.click('[data-testid="builds-reload"]', { timeout: 30_000 })
   const rows = await settleCount(page, '[data-testid^="build-row-"]', 22, { timeoutMs: 20_000 })
   check('the imported build draws one row per cell', rows === 22, `${String(rows)} rows`)
+  const missing = (await page.textContent('[data-testid="builds-missing-dump"]').catch(() => null)) ?? ''
+  check('no saved dump of the build’s loadout: said, not guessed', missing.includes('BRD/ENC/WIZ'), missing)
+  await page.click('[data-testid="build-compare"]')
+  await page.click('li[role="option"][data-value="newest"]')
+  await settleGone(page, '[data-testid="builds-missing-dump"]', { timeoutMs: 8_000 })
   check('SHOULDERS: same item as worn, row not marked', (await rowAttr(page, 'SHOULDERS')) === 'false')
   check('FACE: a different item, row marked', (await rowAttr(page, 'FACE')) === 'true')
   const faceBg = await page.$eval('[data-testid="build-row-FACE"]', (el) => getComputedStyle(el).backgroundColor)
   check('…and the mark is a visible background', faceBg !== 'rgba(0, 0, 0, 0)' && faceBg !== 'transparent', faceBg)
   const shoulders = (await page.textContent('[data-testid="build-row-SHOULDERS"]')) ?? ''
-  check('a cell shows where its item comes from', shoulders.includes('Innoruuk @ Plane of Hate'), shoulders.slice(0, 160))
+  check(
+    'a cell shows where its item comes from',
+    shoulders.includes('Innoruuk @ Plane of Hate'),
+    shoulders.slice(0, 160)
+  )
   const body = (await page.textContent('body')) ?? ''
-  check('a broken build file is listed with its reason', body.includes('broken.json') && body.includes('unknown cell "CHARM"'))
+  check(
+    'a broken build file is listed with its reason',
+    body.includes('broken.json') && body.includes('unknown cell "CHARM"')
+  )
 }
 
 async function stepMatch(page: Page): Promise<void> {

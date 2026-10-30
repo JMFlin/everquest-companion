@@ -61,6 +61,7 @@ import { timeSeam } from './perfAttribution'
 // returns. The whole argument — why a generation and not a queue or a mutex — is in that file.
 import { beginSwitch, type SwitchTurn } from './switchController'
 import { getOverlayWindow, sendToMain } from './windows'
+import { fileNewestDump } from './ipc/builds'
 import type { CharacterRef, EqConfig } from '../shared/types'
 
 let character: CharacterRef | null = null
@@ -539,6 +540,8 @@ function loadInventoryNow(ref: CharacterRef, why: 'startup' | 'watch'): void {
       `[everquest-companion] Inventory ${why === 'startup' ? 'loaded at startup' : 'auto-reloaded'}: ${res.path}`
     )
     sendToMain(IPC.onInventoryReload, { path: res.path, loadedAt: res.loadedAt })
+    // Filed under its class loadout now, before the next dump overwrites it (wornLoadouts.ts).
+    fileNewestDump(who)
     // The builds overlay compares against this dump, so it hears the same news.
     getOverlayWindow('builds')?.webContents.send(IPC.onInventoryReload)
     sendToMain(IPC.onProgress, getProgress(activeCharId()))

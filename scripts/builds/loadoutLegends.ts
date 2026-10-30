@@ -22,6 +22,8 @@ import type { PlanSlotId } from '../../src/shared/planner/types'
 export interface BuildFileJson {
   name: string
   url: string
+  /** the page's class loadout ("MNK/PAL/ENC"), so the build compares against that loadout's dump */
+  classes?: string
   slots: Partial<Record<PlanSlotId, { name: string; exaltations?: Partial<Record<ExaltKind, string>> }>>
 }
 
@@ -125,7 +127,8 @@ const EXALTATION_SUFFIX = ' (Exaltation)'
 
 export function parseLoadoutPage(html: string, url: string): BuildFileJson {
   const payload = flightPayload(html)
-  const build: BuildFileJson = { name: defaultName(html, payload), url, slots: {} }
+  const classes = activeLoadout(payload)
+  const build: BuildFileJson = { name: defaultName(html, payload), url, ...(classes && { classes }), slots: {} }
   for (const item of pageItems(payload)) {
     if (NOT_WORN.test(item.location)) continue
     const cell = CELL_OF_LOCATION[item.location]
