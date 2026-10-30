@@ -103,20 +103,30 @@ function pageItems(payload: string): PageItem[] {
   return out
 }
 
-/** "Larlen - Rivervale EverQuest Legends Character | …" + `?loadout=WIZ%2FBRD%2FENC` → "Larlen (WIZ/BRD/ENC)". */
-function defaultName(html: string): string {
+/**
+ * The class loadout the page's gear belongs to: the `classLoadout` stated right beside its
+ * `equipment`. Not a `loadout=` link in the HTML — a character with several loadouts links to all
+ * of them, and the first link is not necessarily the one on screen.
+ */
+function activeLoadout(payload: string): string | undefined {
+  return /"classLoadout":"([^"]+)","equipment"/.exec(payload)?.[1]
+}
+
+/** "Larlen - Rivervale EverQuest Legends Character | …" + active loadout → "Larlen (WIZ/BRD/ENC)". */
+function defaultName(html: string, payload: string): string {
   const title = /<title>([^<]*)<\/title>/.exec(html)?.[1]
   const character = title?.split(' - ')[0]?.trim()
   if (!character) throw new Error('no character name in the page title')
-  const loadout = /[?&]loadout=([^"&\\]+)/.exec(html)?.[1]
-  return loadout === undefined ? character : `${character} (${decodeURIComponent(loadout)})`
+  const loadout = activeLoadout(payload)
+  return loadout === undefined ? character : `${character} (${loadout})`
 }
 
 const EXALTATION_SUFFIX = ' (Exaltation)'
 
 export function parseLoadoutPage(html: string, url: string): BuildFileJson {
-  const build: BuildFileJson = { name: defaultName(html), url, slots: {} }
-  for (const item of pageItems(flightPayload(html))) {
+  const payload = flightPayload(html)
+  const build: BuildFileJson = { name: defaultName(html, payload), url, slots: {} }
+  for (const item of pageItems(payload)) {
     if (NOT_WORN.test(item.location)) continue
     const cell = CELL_OF_LOCATION[item.location]
     if (cell === undefined) throw new Error(`unknown slot "${item.location}" - has loadoutlegends.com changed?`)
@@ -124,6 +134,8 @@ export function parseLoadoutPage(html: string, url: string): BuildFileJson {
     if (build.slots[cell] !== undefined) continue
     const exaltations: Partial<Record<ExaltKind, string>> = {}
     for (const ex of item.exaltations) {
+      // Cosmetic (dump Slot2), and the planner's socket types exclude it too: nothing to compare.
+      if (ex.slot === 'Ornamentation') continue
       const kind = KIND_OF_SOCKET[ex.slot]
       if (kind === undefined) throw new Error(`unknown exaltation socket "${ex.slot}" on ${item.name}`)
       exaltations[kind] = ex.definition.endsWith(EXALTATION_SUFFIX)

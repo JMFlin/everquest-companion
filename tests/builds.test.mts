@@ -38,6 +38,14 @@ test('import: every worn cell of the page, labels mapped onto planner cells', ()
   assert.equal(parseBuildFile('larlen-rivervale', file).slots.FACE?.name, 'Darkbrood Mask')
 })
 
+test('import: an ornamentation socket is cosmetic and skipped, not an unknown socket', () => {
+  const file = parseLoadoutPage(readFileSync(join(fixtures, 'loadoutlegends-tiki.html'), 'utf8'), URL)
+  assert.equal(file.name, 'Tiki (MNK/PAL/ENC)')
+  assert.ok(Object.keys(file.slots).length > 0)
+  const kinds = Object.values(file.slots).flatMap((s) => Object.keys(s.exaltations ?? {}))
+  assert.ok(!kinds.includes('ornamentation'))
+})
+
 test('import: a page without the flight payload throws instead of writing an empty build', () => {
   assert.throws(() => parseLoadoutPage('<title>X - Y</title>', URL), /flight payload/)
 })
