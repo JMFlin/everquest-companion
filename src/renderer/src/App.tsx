@@ -34,6 +34,7 @@ import GearView from './features/gear/GearView'
 // that would defer it.
 import WishlistView from './features/wishlist/WishlistView'
 import MotesView from './features/motes/MotesView'
+import { BuildsTab } from './features/builds/BuildsView'
 import BossView from './features/bosses/BossView'
 import MobsView from './features/mobs/MobsView'
 import MapsView from './features/maps/MapsView'
@@ -149,6 +150,9 @@ function PlainView({
           Exaltations tab's donor names use, so the drill's Back arrow comes home here. */}
       {view === 'wishlist' && <WishlistView key={viewKey} onOpenLoot={routing.openLoot} />}
       {view === 'motes' && <MotesView key={viewKey} />}
+      {/* The view check lives in the feature file, the SpellDrill rule: one more branch here would
+          cross `PlainView`'s complexity ceiling. */}
+      <BuildsTab view={view} viewKey={viewKey} />
       {view === 'buffs' && <BuffsView key={viewKey} />}
       {/* Respawn clocks (JOS-194). Character-scoped like the rest: the remount `key` is the
           whole contract, since the watch list lives in the store and the clocks are re-derived

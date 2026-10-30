@@ -217,16 +217,27 @@ export function focusBearers(dump: InventoryDump): FocusBearer[] {
 }
 
 export function equippedHosts(dump: InventoryDump): InventoryHost[] {
-  const out: InventoryHost[] = []
+  return equippedEntries(dump).map(({ cell, entry }) => {
+    const parsed = parseItemName(entry.name)
+    const host: InventoryHost = { slot: cell, name: parsed.base }
+    if (parsed.tier !== undefined) host.tier = parsed.tier
+    return host
+  })
+}
+
+/**
+ * The cell assignment `equippedHosts` makes, with the dump row itself — for a caller that needs
+ * more of the row than its name (the Builds tab reads the socketed exaltations off `children`).
+ * One assignment for both, so the two can never disagree about which ring is FINGER2.
+ */
+export function equippedEntries(dump: InventoryDump): { cell: PlanSlotId; entry: InventoryEntry }[] {
+  const out: { cell: PlanSlotId; entry: InventoryEntry }[] = []
   const filled = new Set<PlanSlotId>()
   for (const entry of walkEntries(dump.items)) {
     const cell = cellsForLocation(entry).find((c) => !filled.has(c))
     if (cell === undefined) continue
     filled.add(cell)
-    const parsed = parseItemName(entry.name)
-    const host: InventoryHost = { slot: cell, name: parsed.base }
-    if (parsed.tier !== undefined) host.tier = parsed.tier
-    out.push(host)
+    out.push({ cell, entry })
   }
   return out
 }

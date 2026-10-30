@@ -643,6 +643,11 @@ export const IPC = {
   // tab, so this is an ordinary channel now: registered in every build, answering in every build.
   characterSheet: 'character:sheet',
 
+  // ---- gear builds (src/shared/builds.ts) ----
+  // renderer/overlay -> main: every build file in <userData>/builds, the unreadable ones with why,
+  // each named item's corpus source, and the active character's worn cells. Returns BuildsPayload.
+  buildsGet: 'builds:get',
+
   // ---- map viewer (docs/plans/map-viewer.md §4.2) ----
   // Main owns `fs` and owns effectiveEqRoot(), so main reads and parses `<eqRoot>\maps` and
   // the renderer receives columnar typed arrays (~690 KB worst case, once per zone change).

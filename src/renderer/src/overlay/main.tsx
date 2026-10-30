@@ -10,6 +10,7 @@ import BuffsOverlay from './BuffsOverlay'
 import XpOverlay from './XpOverlay'
 import RespawnOverlay from './RespawnOverlay'
 import MotesOverlay from './MotesOverlay'
+import BuildsOverlay from './BuildsOverlay'
 import { isHealOverlayKind } from '@shared/types'
 import { isTimerOverlayKind } from '@shared/buffTimers'
 import { installOverlayPointerExit } from './pointerExit'
@@ -54,6 +55,7 @@ function Surface(): React.JSX.Element {
   if (kind === 'xp') return <XpOverlay />
   if (kind === 'respawn') return <RespawnOverlay />
   if (kind === 'motes') return <MotesOverlay />
+  if (kind === 'builds') return <BuildsOverlay />
   if (isTimerOverlayKind(kind)) return <BuffsOverlay kind={kind} />
   if (isHealOverlayKind(kind)) return <HealMeter />
   return <OverlayMeter />
