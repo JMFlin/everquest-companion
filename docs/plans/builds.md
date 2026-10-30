@@ -44,9 +44,10 @@ Data flow: build files + dump (+ saved loadout copies) → `builds:get` → `use
   `/outputfile inventory`). An unpaired dump is not filed: a guessed loadout would compare the
   wrong gear. Filing runs on every dump re-read and on every `builds:get`. Loadouts are class
   sets: `MNK/PAL/ENC` and `PAL/MNK/ENC` are one loadout (`loadoutKey`, sorted).
-- **Compare with** (tab dropdown, shared with the overlay): *auto* uses the build's loadout
-  copy (or the newest dump for a build naming no loadout); *newest dump* or any saved loadout
-  can be picked instead. A missing copy says so rather than falling back to another loadout.
+- **Compare with** (tab dropdown, shared with the overlay) lists one entry per loadout, each
+  holding that loadout's newest dump, plus the newest dump on its own while no `/who` named its
+  loadout. A build opens on its own loadout; with no dump of that loadout saved yet it compares
+  the newest dump and says so. Older dumps of a loadout are not kept.
 - **No cache, no file watcher.** The tab and overlay re-read on open, on Reload, on a dump
   re-read and (overlay) on a character switch.
 

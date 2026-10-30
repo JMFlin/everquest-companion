@@ -7,9 +7,9 @@
  * the pieces meet:
  *
  *   * Larlen's imported build names its loadout (WIZ/BRD/ENC) and no dump of that loadout was saved,
- *     so the tab says so instead of comparing another loadout's gear. Compare with → Newest dump
- *     then compares it against the dev character's committed dump: SHOULDERS is the same item (Pauldrons of Power) and its
- *     row is NOT yellow; FACE differs (Darkbrood Mask vs Polished Mithril Mask) and IS.
+ *     so the tab says so and compares the newest dump, the dev character's committed one:
+ *     SHOULDERS is the same item (Pauldrons of Power) and its row is NOT yellow; FACE differs
+ *     (Darkbrood Mask vs Polished Mithril Mask) and IS.
  *   * a build cell shows where its item comes from, out of the committed corpus.
  *   * a broken build file is listed with its reason, not skipped.
  *   * a hand-written build matching the dump in two cells (item AND named exaltation) and differing
@@ -65,10 +65,11 @@ async function stepLarlen(page: Page): Promise<void> {
   const rows = await settleCount(page, '[data-testid^="build-row-"]', 22, { timeoutMs: 20_000 })
   check('the imported build draws one row per cell', rows === 22, `${String(rows)} rows`)
   const missing = (await page.textContent('[data-testid="builds-missing-dump"]').catch(() => null)) ?? ''
-  check('no saved dump of the build’s loadout: said, not guessed', missing.includes('BRD/ENC/WIZ'), missing)
-  await page.click('[data-testid="build-compare"]')
-  await page.click('li[role="option"][data-value="newest"]')
-  await settleGone(page, '[data-testid="builds-missing-dump"]', { timeoutMs: 8_000 })
+  check(
+    'no saved dump of the build’s loadout: said, newest dump compared instead',
+    missing.includes('BRD/ENC/WIZ'),
+    missing
+  )
   check('SHOULDERS: same item as worn, row not marked', (await rowAttr(page, 'SHOULDERS')) === 'false')
   check('FACE: a different item, row marked', (await rowAttr(page, 'FACE')) === 'true')
   const faceBg = await page.$eval('[data-testid="build-row-FACE"]', (el) => getComputedStyle(el).backgroundColor)

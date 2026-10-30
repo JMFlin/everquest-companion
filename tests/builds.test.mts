@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   compareBuild,
+  compareKey,
   parseBuildFile,
   sourceLines,
   wornCells,
@@ -144,21 +145,22 @@ test('build file: classes validated as 1-3 distinct /who codes', () => {
   assert.throws(() => parseBuildFile('x', { classes: 'PAL/MNK/ENC/WAR', slots: {} }), /distinct/)
 })
 
-test('compare target: auto picks the build loadout copy, newest the latest dump, a key that copy', () => {
+test('compare target: a build opens on its own loadout, else the newest dump; one key per loadout', () => {
   const newest = { loadedAt: '2026-10-30T10:00:00.000Z', classes: 'BST/ENC/SHM', cells: {} }
   const pal = { loadedAt: '2026-10-29T10:00:00.000Z', classes: 'ENC/MNK/PAL', cells: {} }
   const payload = { worn: newest, loadouts: { 'BST/ENC/SHM': newest, 'ENC/MNK/PAL': pal } } as unknown as BuildsPayload
   const forPal: Build = { id: 'p', name: 'p', classes: 'ENC/MNK/PAL', slots: {} }
+  const forWar: Build = { id: 'w', name: 'w', classes: 'CLR/WAR', slots: {} }
   const any: Build = { id: 'a', name: 'a', slots: {} }
-  assert.equal(wornFor(payload, forPal, 'auto'), pal)
-  assert.equal(wornFor(payload, any, 'auto'), newest)
-  assert.equal(wornFor(payload, forPal, 'newest'), newest)
-  assert.equal(wornFor(payload, any, 'ENC/MNK/PAL'), pal)
-  assert.equal(
-    wornFor(payload, { ...forPal, classes: 'CLR/WAR' }, 'auto'),
-    null,
-    'no copy yet → nothing, not the newest'
-  )
+  assert.equal(compareKey(payload, forPal, 'auto'), 'ENC/MNK/PAL')
+  assert.equal(compareKey(payload, any, 'auto'), 'BST/ENC/SHM', 'the newest dump, by its loadout')
+  assert.equal(compareKey(payload, forWar, 'auto'), 'BST/ENC/SHM', 'no dump of its loadout yet: the newest')
+  assert.equal(compareKey(payload, forPal, 'BST/ENC/SHM'), 'BST/ENC/SHM', 'a picked loadout wins')
+  assert.equal(wornFor(payload, 'ENC/MNK/PAL'), pal)
+  const unpaired = { worn: { loadedAt: newest.loadedAt, cells: {} }, loadouts: {} } as unknown as BuildsPayload
+  assert.equal(compareKey(unpaired, forPal, 'auto'), 'newest', 'a dump no /who named')
+  assert.equal(wornFor(unpaired, 'newest'), unpaired.worn)
+  assert.equal(wornFor(unpaired, 'ENC/MNK/PAL'), null)
 })
 
 const WHO =
