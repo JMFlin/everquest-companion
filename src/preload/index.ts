@@ -115,6 +115,7 @@ import { engineBridge } from './engine'
 // The NOTES are committed source the renderer imports directly — see ./releaseNotes.ts.
 import { releaseNotesBridge } from './releaseNotes'
 import { currencyBridge } from './currency'
+import { buildsBridge } from './builds'
 // The DEV-ONLY triage surface (see the banner above its methods, below). Types only — the
 // contract lives in src/shared so main, preload and the renderer name one definition.
 import type {
@@ -319,6 +320,7 @@ const api = {
   // …and the two what's-new methods (./releaseNotes.ts), for the same file-size reason.
   ...releaseNotesBridge,
   ...currencyBridge,
+  ...buildsBridge,
 
   /**
    * Is this the headless integration-test channel (`EQ_E2E=1`, src/main/e2e.ts)?

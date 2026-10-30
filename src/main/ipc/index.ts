@@ -20,6 +20,7 @@ import { registerResistIpc } from './resist'
 import { registerRespawnIpc } from './respawn'
 import { registerCharacterIpc } from './character'
 import { registerCharacterSheetIpc } from './characterSheet'
+import { registerBuildsIpc } from './builds'
 import { registerCurrencyIpc } from './currency'
 import { registerClipboardIpc } from './clipboard'
 import { registerComboIpc } from './combo'
@@ -81,6 +82,7 @@ export function registerIpc(): void {
   // itself survives, tenantless, for whatever surface lands on main before its review next
   // (../unreleased.ts explains what it is for and how to adopt it).
   registerCharacterSheetIpc()
+  registerBuildsIpc()
   registerOutputsIpc()
   registerWorldIpc()
   registerComboIpc()

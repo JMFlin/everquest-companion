@@ -202,6 +202,11 @@ export function compareBuild(build: Build, worn: WornCells): CompareRow[] {
   return rows
 }
 
+/** How many cells differ in item or in a named exaltation — the tab's summary line. */
+export function differingCells(rows: readonly CompareRow[]): number {
+  return rows.filter((r) => r.differs || r.exaltations.some((e) => e.differs)).length
+}
+
 /** "Innoruuk @ Plane of Hate", "Quest: Wizard Test of Focus" — the lines a source renders as. */
 export function sourceLines(source: ItemSource | null): string[] {
   if (source === null) return []

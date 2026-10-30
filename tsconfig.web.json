@@ -50,6 +50,8 @@
     "src/preload/releaseNotes.ts",
     // …and `currency.ts` (the currency-window scan pair, both bridges).
     "src/preload/currency.ts",
+    // …and `builds.ts` (the Builds read, both bridges), likewise.
+    "src/preload/builds.ts",
     // …and `uiScale.ts` (the main window's text size, JOS-123), likewise.
     "src/preload/uiScale.ts",
     // …and `buffTrust.ts` (the buff externals allowlist, JOS-140), likewise.
