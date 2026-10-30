@@ -2,7 +2,8 @@
 
 `JMFlin/everquest-companion` is a long-lived fork of
 [jmoyers/everquest-companion](https://github.com/jmoyers/everquest-companion). It carries the
-**Motes** feature (scan, auto rescan, upgrade planner) and the build changes below. These
+**Motes** feature (scan, auto rescan, upgrade planner), the **Builds** tab and overlay
+([`docs/plans/builds.md`](docs/plans/builds.md)), and the build changes below. These
 changes are not headed upstream, so the fork tracks upstream by merging, not by sending PRs.
 
 ## Building and installing

@@ -1,7 +1,7 @@
 # EQ Legends Companion
 
 > **This is a fork** of [jmoyers/everquest-companion](https://github.com/jmoyers/everquest-companion)
-> that adds Motes. Build and sync instructions: [`FORK.md`](FORK.md).
+> that adds Motes and Builds. Build and sync instructions: [`FORK.md`](FORK.md).
 
 A Windows desktop companion for **EverQuest Legends**. It reads the log file the game
 already writes and turns it into live, useful views — a DPS meter, floating overlays,
@@ -33,6 +33,12 @@ off logging, the app simply has nothing to show.
   The upgrade planner takes a spell's or gear piece's current rank and goal and lists which motes
   to apply, wasting the least XP. The scan is a screenshot of the game window read by local OCR —
   nothing leaves your machine.
+- **Builds** — save gear builds (import a loadoutlegends.com character, or write a small JSON
+  file) and compare one against what you wear, from your latest `/outputfile inventory`. Cells
+  where the item or a named exaltation differs are yellow, and every build piece shows where it
+  drops or which quest gives it. The Builds overlay lists just the cells you still need. Import:
+  `npx tsx scripts/import-build.mts <loadoutlegends character URL>`. Details:
+  [`docs/plans/builds.md`](docs/plans/builds.md).
 - **Sound alerts** — play a sound when something happens: a charm break, a buff fading,
   a raid target dying, or any log line you write a rule for. Voice packs included.
 
