@@ -37,7 +37,14 @@ const file = parseLoadoutPage(await res.text(), url)
 const name = arg('--name')
 if (name !== undefined) file.name = name
 
-const id = arg('--id') ?? new URL(url).pathname.split('/').filter(Boolean).pop()
+/** `tiki-freeport` + `?loadout=MNK/PAL/ENC` → `tiki-freeport-mnk-pal-enc`: one file per loadout. */
+function defaultId(): string | undefined {
+  const parsed = new URL(url)
+  const slug = parsed.pathname.split('/').filter(Boolean).pop()
+  const loadout = parsed.searchParams.get('loadout')
+  return loadout === null || slug === undefined ? slug : `${slug}-${loadout.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+}
+const id = arg('--id') ?? defaultId()
 if (id === undefined || !/^[\w.-]+$/.test(id)) throw new Error(`cannot derive a file name from ${url}; pass --id`)
 // The app's own validator, so the importer can never write a file the tab would reject.
 parseBuildFile(id, file)
