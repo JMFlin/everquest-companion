@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from 'react'
 import { planMotes } from '@shared/planner/motes'
-import type { MoteName, MotePlan, Selection, Step } from '@shared/planner/motes'
+import type { MoteName, MotePlan, Selection, Step, StepGroup } from '@shared/planner/motes'
 
 export interface RankPick {
   sel?: Selection
@@ -94,16 +94,17 @@ export function shortMote(name: MoteName): string {
   return name.replace(/^Mote of /, '').replace(/ Potential$/, '')
 }
 
+/** A step's line inside its group; a spare's steps carry no spare label, their group header does. */
 export function stepText(s: Step): string {
   if (s.kind === 'condense') return `Condense ${s.pairs * 2}× ${shortMote(s.mote)} → ${s.pairs}× ${shortMote(s.into)}`
-  const what =
-    s.kind === 'merge'
-      ? `Merge ${s.count}× spare +${s.tier} copy`
-      : s.kind === 'level'
-        ? `Spare ${s.spare + 1} (+${s.from}): apply ${s.count}× ${shortMote(s.mote)}`
-        : `Apply ${s.count}× ${shortMote(s.mote)}`
+  const what = s.kind === 'merge' ? `Merge ${s.count}× spare +${s.tier} copy` : `Apply ${s.count}× ${shortMote(s.mote)}`
   const progress = s.after.full < 10 ? ` (${s.after.fraction}/${2 ** s.after.full})` : ''
   return `${what} → rank ${s.after.full}${progress}`
+}
+
+export function groupTitle(g: StepGroup): string {
+  if (g.kind === 'spare') return `Spare copy ${g.spare + 1} (+${g.from}), then merge it in`
+  return g.kind === 'condense' ? 'First, condense' : g.kind === 'main' ? 'Main item' : ''
 }
 
 /** The section's closing line: how far it gets, or what it wastes. */

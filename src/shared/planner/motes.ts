@@ -64,6 +64,11 @@ export type Step =
     }
   | { kind: 'merge'; tier: number; count: number; after: ItemUpgradeState }
 
+/** A plan's steps by the copy they act on; 'all' is a plan with no spare copies in it. */
+export type StepGroup =
+  | { kind: 'all' | 'condense' | 'main'; steps: Step[] }
+  | { kind: 'spare'; spare: number; from: number; steps: Step[] }
+
 export interface SectionPlan {
   from: number
   to: number
@@ -234,4 +239,26 @@ export function planMotes(
   const spell = sel.spell ? planSpell(counts, sel.spell) : undefined
   const remaining = Object.fromEntries(MOTES.map((m, i) => [m.name, counts[i]])) as Record<MoteName, number>
   return { ...(spell ? { spell } : {}), ...(gear ? { gear } : {}), remaining }
+}
+
+/**
+ * `steps` by the copy they act on, in the order to do them: condensing first, then each levelled
+ * spare copy, then the main item (its own motes and every merge into it). A plan without spare
+ * copies stays one 'all' group.
+ */
+export function stepGroups(steps: readonly Step[]): StepGroup[] {
+  if (!steps.some((s) => s.kind === 'level' || s.kind === 'merge')) return [{ kind: 'all', steps: [...steps] }]
+  const groups: StepGroup[] = []
+  const condense = steps.filter((s) => s.kind === 'condense')
+  if (condense.length > 0) groups.push({ kind: 'condense', steps: condense })
+  const spares = new Map<number, Extract<StepGroup, { kind: 'spare' }>>()
+  for (const s of steps) {
+    if (s.kind !== 'level') continue
+    const group = spares.get(s.spare) ?? { kind: 'spare', spare: s.spare, from: s.from, steps: [] }
+    group.steps.push(s)
+    spares.set(s.spare, group)
+  }
+  groups.push(...spares.values())
+  groups.push({ kind: 'main', steps: steps.filter((s) => s.kind === 'apply' || s.kind === 'merge') })
+  return groups
 }

@@ -22,13 +22,13 @@ import {
   Typography
 } from '@mui/material'
 import type { CurrencyScanResult } from '@shared/currencyScan'
-import { MOTES, type SectionPlan } from '@shared/planner/motes'
+import { MOTES, stepGroups, type SectionPlan } from '@shared/planner/motes'
 import { useProgress } from '../posky/useProgress'
 import { ScanPreview } from './ScanPreview'
 import { GearExtras, ProgressField } from './GearExtras'
 import { heldMotes } from './heldMotes'
 import { useAutoRescan } from './useAutoRescan'
-import { RANKS, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type Planner, type RankPick } from './usePlanner'
+import { RANKS, groupTitle, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type Planner, type RankPick } from './usePlanner'
 
 function RankPicker(props: { label: string; pick: RankPick; onPick: (n: number) => void }): JSX.Element {
   return (
@@ -52,10 +52,23 @@ function PlanSteps({ plan }: { plan: SectionPlan }): JSX.Element {
   const outcome = outcomeText(plan)
   return (
     <Box sx={{ pl: 9 }}>
-      {plan.steps.map((s, i) => (
-        <Typography key={i} variant="body2">
-          {stepText(s)}
-        </Typography>
+      {stepGroups(plan.steps).map((g, gi) => (
+        <Box
+          key={gi}
+          data-testid="motes-step-group"
+          sx={g.kind === 'all' ? undefined : { borderLeft: 2, borderColor: g.kind === 'main' ? 'primary.main' : 'divider', pl: 1, mb: 1 }}
+        >
+          {g.kind !== 'all' && (
+            <Typography variant="subtitle2" color={g.kind === 'main' ? 'primary.main' : 'text.secondary'}>
+              {groupTitle(g)}
+            </Typography>
+          )}
+          {g.steps.map((s, i) => (
+            <Typography key={i} variant="body2">
+              {stepText(s)}
+            </Typography>
+          ))}
+        </Box>
       ))}
       <Typography variant="body2" color={outcome.ok ? 'success.main' : 'warning.main'}>
         {outcome.text}

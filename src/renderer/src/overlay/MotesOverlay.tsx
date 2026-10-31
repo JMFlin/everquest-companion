@@ -7,12 +7,12 @@ import type { CSSProperties, JSX, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CurrencyScanResult } from '@shared/currencyScan'
 import type { ItemCountOverride } from '@shared/itemOverrides'
-import { MOTES, SPARE_MAX_TIER, type SectionPlan } from '@shared/planner/motes'
+import { MOTES, SPARE_MAX_TIER, stepGroups, type SectionPlan } from '@shared/planner/motes'
 import type { LootSnap } from '@shared/types'
 import { heldMotes } from '../features/motes/heldMotes'
 import { scanSummary } from '../features/motes/ScanPreview'
 import { useAutoRescan } from '../features/motes/useAutoRescan'
-import { RANKS, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type RankPick } from '../features/motes/usePlanner'
+import { RANKS, groupTitle, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type RankPick } from '../features/motes/usePlanner'
 import { useOverlayChrome } from './useOverlayChrome'
 import { useOverlayModule } from './useOverlayModule'
 import { OverlayHeader } from './OverlayHeader'
@@ -68,8 +68,16 @@ function Steps({ plan }: { plan: SectionPlan }): JSX.Element {
   const outcome = outcomeText(plan)
   return (
     <div style={{ paddingLeft: 38 }}>
-      {plan.steps.map((s, i) => (
-        <div key={i}>{stepText(s)}</div>
+      {stepGroups(plan.steps).map((g, gi) => (
+        <div
+          key={gi}
+          style={g.kind === 'all' ? undefined : { borderLeft: `2px solid ${g.kind === 'main' ? GOLD : 'rgba(255,255,255,0.25)'}`, paddingLeft: 6, marginBottom: 4 }}
+        >
+          {g.kind !== 'all' && <div style={{ color: g.kind === 'main' ? GOLD : DIM, fontWeight: 600 }}>{groupTitle(g)}</div>}
+          {g.steps.map((s, i) => (
+            <div key={i}>{stepText(s)}</div>
+          ))}
+        </div>
       ))}
       <div style={{ color: outcome.ok ? '#8fd18f' : '#e0b050' }}>{outcome.text}</div>
     </div>

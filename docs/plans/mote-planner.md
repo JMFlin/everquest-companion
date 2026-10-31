@@ -14,7 +14,7 @@ never which mote went into an upgrade. The currency window can.
 | `src/shared/planner/motes.ts` | `planMotes`: the public planner API and the spell plan. |
 | `src/shared/planner/moteXp.ts` | The `MOTES` catalog (eqlwiki Mote_Guide values) and the XP curve. |
 | `src/shared/planner/moteGearSearch.ts` | The gear search: which motes go on the piece and on each spare copy. |
-| `src/renderer/src/features/motes/` | The Motes tab. `heldMotes` (statement + loot since − destroyed since) and `usePlanner` (rank picks, banked progress, spare copies) are shared with the overlay, and so is `useAutoRescan`, the auto-rescan checkbox state. Runes are scanned and saved for the Sky tracker but not shown. |
+| `src/renderer/src/features/motes/` | The Motes tab. `heldMotes` (statement + loot since − destroyed since) and `usePlanner` (rank picks, banked progress, spare copies) are shared with the overlay, and so is `useAutoRescan`, the auto-rescan checkbox state. Both surfaces draw a gear plan with spare copies as blocks per copy (`stepGroups` in `motes.ts`): condensing, each levelled spare, then the main item with its merges. Runes are scanned and saved for the Sky tracker but not shown. |
 | `src/renderer/src/overlay/MotesOverlay.tsx` | The `motes` overlay kind: Scan, the auto-rescan checkbox, held motes and the same planner on top of the game, in plain divs. |
 
 ## Why it is shaped this way
