@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { planMotes, type MoteName, type SectionPlan } from '../src/shared/planner/motes'
+import { planMotes, stepGroups, type MoteName, type SectionPlan } from '../src/shared/planner/motes'
 import { NAMES, bruteForceGear, cum, replay, toCounts } from './motePlannerFixture.mts'
 
 test('gear DP levelling several spares matches exhaustive search', () => {
@@ -94,4 +94,27 @@ test('at equal value gear spends lower-tier motes and keeps the higher ones', ()
   replay(toCounts(held), plan.gear as SectionPlan, 'gear')
   assert.equal(plan.remaining['Mote of Lesser Potential'], 1)
   assert.equal(plan.remaining['Mote of Minor Potential'], 0)
+})
+
+test('stepGroups splits a plan into condensing, each levelled spare, then the main item', () => {
+  const held = { 'Mote of Infinitesimal Potential': 2, 'Mote of Minor Potential': 4 }
+  const plan = planMotes(held, { gear: { from: 2, to: 4, spares: [0, 0, 3], condense: true } })
+  const steps = (plan.gear as SectionPlan).steps
+  const groups = stepGroups(steps)
+  assert.deepEqual(
+    groups.map((g) => g.kind),
+    [...(steps.some((s) => s.kind === 'condense') ? ['condense'] : []), 'spare', 'spare', 'main']
+  )
+  assert.deepEqual(
+    groups.filter((g) => g.kind === 'spare').map((g) => g.kind === 'spare' && [g.spare, g.from]),
+    [[0, 0], [1, 0]]
+  )
+  assert.ok(groups.at(-1)?.steps.every((s) => s.kind === 'apply' || s.kind === 'merge'))
+  assert.equal(groups.flatMap((g) => g.steps).length, steps.length)
+})
+
+test('stepGroups keeps a plan without spare copies as one flat group', () => {
+  const plan = planMotes({ 'Mote of Minor Potential': 3 }, { gear: { from: 0, to: 2 } })
+  const steps = (plan.gear as SectionPlan).steps
+  assert.deepEqual(stepGroups(steps), [{ kind: 'all', steps }])
 })
