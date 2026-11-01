@@ -50,6 +50,7 @@
 
 import type { QuestProgress } from './useProgress'
 import { sortQuests } from './questSort'
+import { itemCountKey } from '../../lib/itemName'
 // The derived-evidence ladder (JOS-429) — shared with main's side of the ledger so "which source
 // speaks" has ONE definition. Relative value import, per the repo's node-tested-module rule.
 import {
@@ -194,4 +195,35 @@ export function withDerivedCompletion(
   // counted, while `turnIns` and `completed` are left exactly as the ledger left them.
   if (!DERIVED_EVIDENCE_FLOORS[evidence]) return { ...q, completionEvidence: evidence }
   return { ...q, turnIns: 1, completed: true, completionEvidence: evidence }
+}
+
+/** The per-item part of a quest's progress `turnInsHeld` reads. Structural, like `CompletableQuest`. */
+export interface HeldQuestItem {
+  name: string
+  /** copies one turn-in consumes */
+  need: number
+  /** copies counted as held right now, UNCAPPED (ItemProgress.held) */
+  held: number
+}
+
+/**
+ * How many times you could hand this quest in with what you hold right now — the Ready tab's
+ * "×N". The scarcest item decides it: floor(held / need), minimum over the required items.
+ *
+ * A quest listing the same item on two lines draws both from one bag count, so the needs are
+ * summed per counting key before dividing; otherwise each line would claim the same copies.
+ *
+ * Counted per quest, on its own. Two ready quests sharing an item each count the shared copies
+ * as theirs, the same way `hasEveryItem` does — the expanded row's shared-items panel is where
+ * that contention is shown.
+ */
+export function turnInsHeld(items: readonly HeldQuestItem[]): number {
+  const byKey = new Map<string, { need: number; held: number }>()
+  for (const it of items) {
+    const k = itemCountKey(it.name)
+    const prev = byKey.get(k)
+    byKey.set(k, { need: (prev?.need ?? 0) + it.need, held: it.held })
+  }
+  if (byKey.size === 0) return 0
+  return Math.min(...[...byKey.values()].map((v) => Math.floor(v.held / v.need)))
 }

@@ -53,7 +53,8 @@ import {
   everTurnedIn,
   firstTimeReady,
   hasEveryItem,
-  readyQuests
+  readyQuests,
+  turnInsHeld
 } from '../src/renderer/src/features/posky/questCompletion'
 import type { QuestProgress } from '../src/renderer/src/features/posky/useProgress'
 import { reconcile } from '../src/renderer/src/features/inventory/reconcile'
@@ -516,4 +517,20 @@ test('the badge counts from the second turn-in on', () => {
   assert.equal(turnInBadgeLabel(1), 'Turned in')
   assert.equal(turnInBadgeLabel(2), 'Turned in x2')
   assert.equal(turnInBadgeLabel(11), 'Turned in x11')
+})
+
+test("THE READY TAB'S ×N: the scarcest item decides how many turn-ins you hold", () => {
+  const item = (name: string, need: number, held: number) => ({ name, need, held })
+  assert.equal(turnInsHeld([item('Sphinx Claw', 2, 7), item('Wind Rune Geza', 1, 5)]), 3, 'claws run out first')
+  assert.equal(turnInsHeld([item('Sphinx Claw', 2, 2), item('Wind Rune Geza', 1, 1)]), 1, 'exactly one set')
+  assert.equal(turnInsHeld([item('Sphinx Claw', 2, 1), item('Wind Rune Geza', 1, 9)]), 0, 'one short is none')
+  assert.equal(turnInsHeld([]), 0, 'a quest needing nothing is not ready, so it holds no turn-ins')
+})
+
+test('…and an item listed twice on one quest draws both lines from one bag count', () => {
+  const lines = [
+    { name: 'Hazy Opal', need: 1, held: 4 },
+    { name: 'Hazy Opal', need: 1, held: 4 }
+  ]
+  assert.equal(turnInsHeld(lines), 2, 'four opals at two per turn-in, not four')
 })
