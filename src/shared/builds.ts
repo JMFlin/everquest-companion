@@ -13,6 +13,10 @@
 // THE DIFF IS ABOUT THE ITEM, NOT ITS +N (owner ruling): a cell is different when the base names
 // differ, case-insensitively. Merge tier is never compared, and a build file carries none.
 //
+// A PAIRED SLOT'S TWO CELLS ARE INTERCHANGEABLE (owner ruling): a ring on FINGER 1 in the build
+// and on FINGER 2 on your body is the same gear. Each pair (ear, wrist, finger) is compared
+// crossed when that matches more items than straight, so a swap is never reported as a difference.
+//
 // EXALTATIONS ARE COMPARED BY SOCKET KIND. The dump files a socketed exaltation under the donor
 // item's name in a numbered child slot, and the numbering is measured (inventorySlots.ts,
 // FOCUS_SOCKET_INDEX): 7 focus, 8 click, 9 worn, 10 proc. A build names the donor per kind. Only
@@ -33,7 +37,7 @@
 import { parseItemName, type InventoryDump } from './outputs/inventory'
 import { equippedEntries } from './planner/inventorySlots'
 import { isClassAbbr, MAX_COMBO_SLOTS, type ClassAbbr } from './classCombo'
-import { PLAN_SLOTS, type PlanSlotId } from './planner/types'
+import { cellsForSlot, PAIRED_SLOTS, PLAN_SLOTS, type PlanSlotId } from './planner/types'
 
 export type ExaltKind = 'focus' | 'click' | 'worn' | 'proc'
 
@@ -225,20 +229,43 @@ export interface ExaltCompare {
 export interface CompareRow {
   cell: PlanSlotId
   build: BuildItem
+  /** what you wear here — for a paired slot, possibly its other cell (see the header) */
   worn: WornItem | null
-  /** the build's item is not the item on this cell (base name, case-insensitive; +N ignored) */
+  /** the build's item is not the item worn (base name, case-insensitive; +N ignored) */
   differs: boolean
   /** one row per kind the build names, in socket order */
   exaltations: ExaltCompare[]
 }
 
+/**
+ * Which worn cell each build cell is compared against: itself, except a paired slot whose two
+ * cells match more items crossed than straight.
+ */
+function pairedSources(build: Build, worn: WornCells): Partial<Record<PlanSlotId, PlanSlotId>> {
+  const same = (b: PlanSlotId, w: PlanSlotId): number => {
+    const want = build.slots[b]
+    const have = worn[w]
+    return want !== undefined && have !== undefined && itemNameKey(want.name) === itemNameKey(have.name) ? 1 : 0
+  }
+  const out: Partial<Record<PlanSlotId, PlanSlotId>> = {}
+  for (const slot of PAIRED_SLOTS) {
+    const [a, b] = cellsForSlot(slot)
+    if (same(a, b) + same(b, a) > same(a, a) + same(b, b)) {
+      out[a] = b
+      out[b] = a
+    }
+  }
+  return out
+}
+
 /** The build against the body, one row per cell the build names, in `PLAN_SLOTS` order. */
 export function compareBuild(build: Build, worn: WornCells): CompareRow[] {
+  const sources = pairedSources(build, worn)
   const rows: CompareRow[] = []
   for (const cell of PLAN_SLOTS) {
     const item = build.slots[cell]
     if (item === undefined) continue
-    const on = worn[cell] ?? null
+    const on = worn[sources[cell] ?? cell] ?? null
     const exaltations: ExaltCompare[] = []
     for (const kind of EXALT_KINDS) {
       const want = item.exaltations?.[kind]

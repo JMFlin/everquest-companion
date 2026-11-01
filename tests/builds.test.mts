@@ -127,6 +127,37 @@ test('compare: different item is a difference, +N and case are not; only named s
   assert.equal(rows[3].worn, null, 'nothing worn there')
 })
 
+test('compare: a paired slot matches across its two cells; which ring is FINGER2 does not matter', () => {
+  const build: Build = {
+    id: 'b',
+    name: 'b',
+    slots: {
+      FINGER: { name: 'Ring of Pureblood', exaltations: { focus: 'Moonstone Ring' } },
+      FINGER2: { name: "Djarn's Amethyst Ring" }
+    }
+  }
+  const rows = compareBuild(build, wornCells(dump))
+  assert.deepEqual(
+    rows.map((r) => [r.cell, r.differs, r.worn?.name]),
+    [
+      ['FINGER', false, 'Ring of Pureblood'],
+      ['FINGER2', false, "Djarn's Amethyst Ring"]
+    ],
+    'each build ring is compared against the cell that wears it'
+  )
+  assert.equal(rows[0].exaltations[0].differs, false, 'sockets follow the matched item')
+
+  const oneSwapped = compareBuild(
+    { id: 'c', name: 'c', slots: { FINGER2: { name: "Djarn's Amethyst Ring" } } },
+    wornCells(dump)
+  )
+  assert.deepEqual(
+    oneSwapped.map((r) => [r.cell, r.differs]),
+    [['FINGER2', false]],
+    'a build naming one cell of a pair still matches the other cell'
+  )
+})
+
 test('source lines: drops then quests; an unknown item has none', () => {
   assert.deepEqual(
     sourceLines({

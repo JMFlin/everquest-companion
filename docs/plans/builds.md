@@ -29,6 +29,9 @@ Data flow: build files + dump (+ saved loadout copies) → `builds:get` → `use
   ring is `FINGER2`.
 - **A cell differs when the item differs**, by base name, case-insensitively. `+N` is never
   compared and build files do not carry it.
+- **A paired slot's two cells are interchangeable.** Ear, wrist and finger pairs compare crossed
+  when that matches more items than straight, so a ring on `FINGER` in the build and `FINGER2` on
+  the body is not a difference. Exaltations follow the matched item.
 - **Exaltations compare by socket kind**: dump child slot 7 focus, 8 click, 9 worn, 10 proc.
   Only the kinds a build names are compared.
 - **Sources are not stored in build files.** Main resolves them from the committed corpus on
