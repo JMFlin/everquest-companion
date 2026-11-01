@@ -92,6 +92,10 @@ async function stepMatch(page: Page): Promise<void> {
   await page.click('li[role="option"]:has-text("Match test")')
   const rows = await settleCount(page, '[data-testid^="build-row-"]', 3, { timeoutMs: 10_000 })
   check('picking another build redraws the table', rows === 3, `${String(rows)} rows`)
+  const wornFocus = await page
+    .getAttribute('[data-testid="build-worn-exalt-FACE-focus"]', 'data-differs', { timeout: 5_000 })
+    .catch(() => null)
+  check('your own socket is drawn beside the build, unmarked when it matches', wornFocus === 'false', String(wornFocus))
   const summary = (await page.textContent('[data-testid="builds-summary"]')) ?? ''
   check('the summary counts only the differing cell', summary === '1 of 3 cells differ', summary)
 }

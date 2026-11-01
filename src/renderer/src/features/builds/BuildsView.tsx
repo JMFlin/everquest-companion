@@ -1,6 +1,7 @@
 // BuildsView — pick a saved build, see it cell by cell beside what you wear, and where each piece
 // comes from. A cell whose item differs from yours is yellow, and so is an exaltation the build
-// names that your socket does not hold. The second dropdown picks which saved dump the build is
+// names that your socket does not hold — on both sides: your worn exaltations are drawn too, and
+// a socket the build wants something else in is the same warning colour. The second dropdown picks which saved dump the build is
 // compared against: by default the build's own class loadout. Everything decided about the comparison lives in
 // @shared/builds; this file only draws it.
 
@@ -26,6 +27,7 @@ import {
 import { alpha } from '@mui/material/styles'
 import {
   differingCells,
+  EXALT_KINDS,
   itemNameKey,
   sourceLines,
   type BuildsPayload,
@@ -64,6 +66,35 @@ function Sources({ source }: { source: ItemSource | null | undefined }): JSX.Ele
   )
 }
 
+/** Your sockets on this cell; one is warning-coloured when the build names a different donor for it. */
+function WornExaltations({ row }: { row: CompareRow }): JSX.Element {
+  const worn = row.worn?.exaltations ?? {}
+  return (
+    <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap', gap: 0.5 }}>
+      {EXALT_KINDS.map((kind) => {
+        const donor = worn[kind]
+        if (donor === undefined) return null
+        const wanted = row.exaltations.find((e) => e.kind === kind)
+        const differs = wanted?.differs ?? false
+        const title =
+          wanted === undefined ? 'The build names nothing here' : differs ? `Build wants: ${wanted.build}` : 'Matches the build'
+        return (
+          <Chip
+            key={kind}
+            data-testid={`build-worn-exalt-${row.cell}-${kind}`}
+            data-differs={differs}
+            size="small"
+            variant="outlined"
+            color={differs ? 'warning' : 'default'}
+            label={`${kind}: ${donor}`}
+            title={title}
+          />
+        )
+      })}
+    </Stack>
+  )
+}
+
 function Row({ row, source }: { row: CompareRow; source: ItemSource | null | undefined }): JSX.Element {
   return (
     <TableRow
@@ -95,10 +126,13 @@ function Row({ row, source }: { row: CompareRow; source: ItemSource | null | und
             nothing
           </Typography>
         ) : (
-          <Typography variant="body2">
-            {row.worn.name}
-            {row.worn.tier !== undefined ? ` +${row.worn.tier}` : ''}
-          </Typography>
+          <>
+            <Typography variant="body2">
+              {row.worn.name}
+              {row.worn.tier !== undefined ? ` +${row.worn.tier}` : ''}
+            </Typography>
+            <WornExaltations row={row} />
+          </>
         )}
       </TableCell>
       <TableCell>

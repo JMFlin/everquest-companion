@@ -34,6 +34,8 @@ Data flow: build files + dump (+ saved loadout copies) → `builds:get` → `use
   the body is not a difference. Exaltations follow the matched item.
 - **Exaltations compare by socket kind**: dump child slot 7 focus, 8 click, 9 worn, 10 proc.
   Only the kinds a build names are compared.
+  The tab draws your worn exaltations too; a worn socket the build wants a different donor in is
+  the same warning colour as the build's chip.
 - **Sources are not stored in build files.** Main resolves them from the committed corpus on
   every read, so a corpus correction reaches every build. An item the corpus lacks shows
   "source unknown".
