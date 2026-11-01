@@ -54,6 +54,7 @@ import { skyQuestPage, wikiPageUrl } from '@shared/wiki'
 import { skyQuestRewardItems } from '@shared/skyQuestRewards'
 // The turn-in badge and the manual counter (JOS-131), in their own file.
 import { TurnInBadge, TurnInCounter } from './TurnInControls'
+import { turnInsHeld } from './questCompletion'
 import type { QuestProgress } from './useProgress'
 import { ItemNameLink, QuestItemsTable } from './QuestItemsTable'
 import type { SetItemCount } from './ItemOverrides'
@@ -245,7 +246,16 @@ function QuestSummaryRow({
         size="small"
         variant="outlined"
         color={q.missing.length === 0 ? 'success' : 'default'}
-        label={q.missing.length === 0 ? 'Ready to turn in' : `${q.missing.length} of ${q.items.length} missing`}
+        label={
+          q.missing.length === 0
+            ? `Ready to turn in ×${String(turnInsHeld(q.items))}`
+            : `${q.missing.length} of ${q.items.length} missing`
+        }
+        title={
+          q.missing.length === 0
+            ? 'How many times you could hand this in with what you hold now (shared items counted for each quest)'
+            : undefined
+        }
       />
       <ProgressBar q={q} />
     </Stack>
