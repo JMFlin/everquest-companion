@@ -55,6 +55,7 @@ import { observedTierOf, useItemTiers } from '../../lib/ObservedItemWindow'
 import type { QuestProgress } from './useProgress'
 import {
   CLEANUP_CAVEAT,
+  KEEP_EXTRA_TURN_INS,
   cleanupRowsFor,
   decisionLine,
   dumpLocationsFrom,
@@ -147,6 +148,12 @@ function CleanupItemRow({
         x{row.quantity}
       </TableCell>
       <TableCell
+        data-testid="posky-cleanup-destroy"
+        sx={{ verticalAlign: 'top', fontWeight: row.destroyable > 0 ? 600 : undefined }}
+      >
+        {row.destroyable}
+      </TableCell>
+      <TableCell
         data-testid="posky-cleanup-where"
         sx={{ verticalAlign: 'top', color: 'text.secondary' }}
       >
@@ -224,6 +231,11 @@ export default function CleanupList({
                 <TableRow>
                   <TableCell>Item</TableCell>
                   <TableCell>Held</TableCell>
+                  <TableCell
+                    title={`What is left after every turn-in you hold sets for, keeping ${String(KEEP_EXTRA_TURN_INS)} more turn-ins' worth`}
+                  >
+                    Can destroy
+                  </TableCell>
                   <TableCell>Where</TableCell>
                   <TableCell>Feeds</TableCell>
                 </TableRow>

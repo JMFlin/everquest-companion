@@ -20,7 +20,9 @@ off logging, the app simply has nothing to show.
   becomes click-through. **Alt+Shift+0** hides every open overlay; press it again to
   bring them back.
 - **Plane of Sky tracker** — every class's Test quests with "have / need" chips per
-  item, item stats on hover, and sorting by closest-to-done.
+  item, item stats on hover, and sorting by closest-to-done. Its Cleanup tab lists items no
+  un-turned-in quest needs, and how many copies you could destroy after the turn-ins you hold
+  sets for, keeping 3 more turn-ins' worth.
 - **Loot + item knowledge** — a running history of what you looted, and what each item
   is actually *for*: which quests use it, what it turns in for, which recipes consume it.
 - **Leveling & AA** — XP and AA progress per character, with history.
