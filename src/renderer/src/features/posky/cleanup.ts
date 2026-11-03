@@ -120,11 +120,20 @@ export interface CleanupRow {
   name: string
   /** the held count the Sky tab shows for it, uncapped */
   quantity: number
+  /** copies beyond every turn-in you hold sets for plus `KEEP_EXTRA_TURN_INS` more of each */
+  destroyable: number
   /** compact places from the dump; EMPTY when no loaded dump names the item */
   locations: readonly CleanupLocation[]
   /** the quests it feeds, most-recently-useful first (most sets, then class, then name) */
   turnIns: readonly CleanupTurnIn[]
 }
+
+/**
+ * How many turn-ins' worth of an item to keep on top of the sets already in hand, before calling
+ * the rest destroyable. The owner's number: a refarmer keeps a margin for the scarce item they
+ * have not farmed yet.
+ */
+export const KEEP_EXTRA_TURN_INS = 3
 
 /** A quest's required items reduced to counting key → how many one turn-in eats. */
 function questNeeds(q: CleanupQuest): Map<string, number> {
@@ -226,10 +235,28 @@ export function cleanupRows(
     const times = claim.quests.map((entry) => progress[entry.quest.key] ?? 0)
     // ONE un-turned-in claimant keeps the item off this screen. See the header.
     if (times.some((n) => n < 1)) continue
-    const turnIns = claim.quests
-      .map((entry, i) => turnInOf(entry, times[i], held))
-      .sort((a, b) => b.sets - a.sets || a.className.localeCompare(b.className) || a.name.localeCompare(b.name))
-    rows.push({ key, name: claim.name, quantity, locations: dumpLocations[key] ?? [], turnIns })
+    const unsorted = claim.quests.map((entry, i) => turnInOf(entry, times[i], held))
+    const turnIns = [...unsorted].sort(
+      (a, b) =>
+        b.sets - a.sets || a.className.localeCompare(b.className) || a.name.localeCompare(b.name)
+    )
+    // Every claimant reserves this item for the sets it can run now plus the extra margin. Summed,
+    // not maxed: two quests eating one stack each count it as theirs, so the sum is the side
+    // that never advises destroying a copy one of them would have used.
+    const reserved = claim.quests.reduce(
+      (sum, entry, i) =>
+        sum + (entry.needs.get(key) ?? 0) * (unsorted[i].sets + KEEP_EXTRA_TURN_INS),
+      0
+    )
+    const destroyable = Math.max(0, quantity - reserved)
+    rows.push({
+      key,
+      name: claim.name,
+      quantity,
+      destroyable,
+      locations: dumpLocations[key] ?? [],
+      turnIns
+    })
   }
   rows.sort((a, b) => b.quantity - a.quantity || a.name.localeCompare(b.name))
   return rows

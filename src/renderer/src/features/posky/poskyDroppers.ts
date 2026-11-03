@@ -400,7 +400,8 @@ export function killTargetFacts(t: KillTarget): string {
 let SKY_INDEX: DropperIndex | null = null
 let SKY_NAMES: MobNameIndex | null = null
 
-function skyMobs(): MobEntry[] {
+/** Every catalog mob whose home zone is the Plane of Sky. */
+export function skyMobs(): MobEntry[] {
   // eslint-disable-next-line eqc/no-domain-munging -- JOS-459 cutover ledger item 8: MobEntry comes from a corpus still bundled in the renderer (mobs/posky/bosses JSON). Moves behind knowledge queries when that surface cuts over.
   return MOB_CATALOG.filter(isSkyMob)
 }

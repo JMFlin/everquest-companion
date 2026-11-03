@@ -55,6 +55,7 @@ import { observedTierOf, useItemTiers } from '../../lib/ObservedItemWindow'
 import type { QuestProgress } from './useProgress'
 import {
   CLEANUP_CAVEAT,
+  KEEP_EXTRA_TURN_INS,
   cleanupRowsFor,
   decisionLine,
   dumpLocationsFrom,
@@ -67,6 +68,8 @@ import {
   type CleanupTurnIn,
   type DumpLocations
 } from './cleanup'
+import { nonQuestDropRows, skyNonQuestDrops, type NonQuestDropRow } from './nonQuestDrops'
+import { dropperLabel } from './poskyDroppers'
 
 /** Nothing anywhere claims to know where an item is. Module-scope so it is identity-stable. */
 export const NO_DUMP_LOCATIONS: DumpLocations = {}
@@ -147,6 +150,12 @@ function CleanupItemRow({
         x{row.quantity}
       </TableCell>
       <TableCell
+        data-testid="posky-cleanup-destroy"
+        sx={{ verticalAlign: 'top', fontWeight: row.destroyable > 0 ? 600 : undefined }}
+      >
+        {row.destroyable}
+      </TableCell>
+      <TableCell
         data-testid="posky-cleanup-where"
         sx={{ verticalAlign: 'top', color: 'text.secondary' }}
       >
@@ -158,6 +167,52 @@ function CleanupItemRow({
         ))}
       </TableCell>
     </TableRow>
+  )
+}
+
+/** Sky drops no quest requires: what you hold of each first, then the rest of the list. */
+function NonQuestDropsTable({
+  rows,
+  onOpenLoot
+}: {
+  rows: readonly NonQuestDropRow[]
+  onOpenLoot?: (item: string) => void
+}): JSX.Element {
+  return (
+    <Box data-testid="posky-nonquest" sx={{ mt: 3 }}>
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        Sky drops no quest uses ({rows.length})
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Item</TableCell>
+            <TableCell>Held</TableCell>
+            <TableCell>Where</TableCell>
+            <TableCell>Dropped by</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow
+              key={row.key}
+              data-testid="posky-nonquest-row"
+              data-item={row.name}
+              data-count={row.held}
+            >
+              <TableCell sx={{ fontWeight: row.held > 0 ? 600 : undefined }}>
+                <ItemNameLink name={row.name} onOpenLoot={onOpenLoot} />
+              </TableCell>
+              <TableCell>{row.held > 0 ? `x${String(row.held)}` : ''}</TableCell>
+              <TableCell sx={{ color: 'text.secondary' }}>
+                {row.held > 0 ? locationsLine(row.locations) : ''}
+              </TableCell>
+              <TableCell sx={{ color: 'text.secondary' }}>{dropperLabel(row.droppers)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
   )
 }
 
@@ -182,6 +237,10 @@ export default function CleanupList({
 
   const locations = useMemo(() => dumpLocationsFrom(sheet?.carry.rows), [sheet])
   const rows = useMemo(() => cleanupRowsFor(quests, locations), [quests, locations])
+  const nonQuestRows = useMemo(
+    () => nonQuestDropRows(skyNonQuestDrops(), locations),
+    [locations]
+  )
   const tierOf = useCallback(
     (reward: string | undefined) => (reward ? observedTierOf(tiers, reward) : undefined),
     [tiers]
@@ -224,6 +283,11 @@ export default function CleanupList({
                 <TableRow>
                   <TableCell>Item</TableCell>
                   <TableCell>Held</TableCell>
+                  <TableCell
+                    title={`What is left after every turn-in you hold sets for, keeping ${String(KEEP_EXTRA_TURN_INS)} more turn-ins' worth`}
+                  >
+                    Can destroy
+                  </TableCell>
                   <TableCell>Where</TableCell>
                   <TableCell>Feeds</TableCell>
                 </TableRow>
@@ -241,6 +305,7 @@ export default function CleanupList({
             </Table>
           </>
         )}
+        <NonQuestDropsTable rows={nonQuestRows} onOpenLoot={onOpenLoot} />
       </Box>
     </Box>
   )
