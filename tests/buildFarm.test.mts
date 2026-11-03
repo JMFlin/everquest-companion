@@ -1,20 +1,28 @@
-// The Builds tab's Farm view: copies still to farm per piece for +7..+10 (src/shared/buildFarm.ts).
+// The Builds tab's Farm view: copies and Major motes per piece for +7..+10 (src/shared/buildFarm.ts).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Build } from '../src/shared/builds'
-import type { LootEvent } from '../src/shared/types'
+import { MOTES } from '../src/shared/planner/moteXp'
 import {
   farmCells,
   farmTargets,
   farmTotals,
-  lootSeen,
+  lootSources,
+  majorsToBoost,
   moteSummary,
+  moteVerdict,
   ownedCopies
 } from '../src/shared/buildFarm'
 
 const build = (slots: Build['slots']): Build => ({ id: 'b', name: 'B', slots })
 
-test('the dump: worn and Equipment key-ring copies are pieces, containers and hoard are spares, sockets are skipped', () => {
+test('a Major is 5 XP with cap +4, so levelling to +5 takes 7 from +0 and 4 from +4', () => {
+  const major = MOTES.find((m) => m.name === 'Mote of Major Potential')
+  assert.deepEqual([major?.itemXp, major?.itemCap], [5, 4])
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map(majorsToBoost), [7, 6, 6, 5, 4, 0])
+})
+
+test('the dump: worn and Equipment key-ring copies are pieces, containers and hoard are spares', () => {
   const owned = ownedCopies([
     { name: 'Weight of the Gods +7', location: 'Shoulders', lane: 'worn' },
     { name: 'Weight of the Gods (Exaltation)', location: 'Shoulders-Slot7', lane: 'worn' },
@@ -32,60 +40,67 @@ test('the dump: worn and Equipment key-ring copies are pieces, containers and ho
   assert.deepEqual(owned.get('cloak of scales'), [{ tier: 3, place: 'Equipment', stored: true }])
 })
 
-test('the log: the usual drop tier and who dropped it', () => {
-  const loot: LootEvent[] = [
-    { ts: 1, item: 'Ethereal Mist Greaves +4', source: 'a storm giant', zone: 'Plane of Sky' },
-    { ts: 2, item: 'Ethereal Mist Greaves +4', source: 'a storm giant', zone: 'Plane of Sky' },
-    { ts: 3, item: 'Ethereal Mist Greaves +1' }
-  ]
-  const seen = lootSeen(loot).get('ethereal mist greaves')
-  assert.equal(seen?.dropTier, 4)
-  assert.deepEqual(seen?.sources, [{ label: 'a storm giant (Plane of Sky)', count: 2 }])
+test('the log: who dropped each item, most first', () => {
+  const sources = lootSources([
+    { ts: 1, item: 'Checkmate +4', source: 'The Game Master', zone: 'Nektropos Castle 4' },
+    { ts: 2, item: 'Checkmate', source: 'The Game Master', zone: 'Nektropos Castle 4' },
+    { ts: 3, item: 'Checkmate +2', source: 'a guard' }
+  ])
+  assert.deepEqual(sources.get('checkmate'), [
+    { label: 'The Game Master (Nektropos Castle 4)', count: 2 },
+    { label: 'a guard', count: 1 }
+  ])
 })
 
-test('a +7 piece with spares: copies per target, levelled to +5 or merged as they drop', () => {
+test('a +7 piece with two spares: copies exact, Majors a range', () => {
   const owned = ownedCopies([
     { name: 'Weight of the Gods +7', location: 'Shoulders', lane: 'worn' },
     { name: 'Weight of the Gods +1', location: 'General 6', lane: 'bags' },
     { name: 'Weight of the Gods', location: 'General 7', lane: 'bags' }
   ])
-  const seen = lootSeen([{ ts: 1, item: 'Weight of the Gods +4' }])
-  const [cell] = farmCells(build({ SHOULDERS: { name: 'Weight of the Gods' } }), owned, seen, {})
-  assert.equal(cell.tier, 7)
+  const [cell] = farmCells(build({ SHOULDERS: { name: 'Weight of the Gods' } }), owned, new Map(), {})
   assert.equal(cell.needs[7], null)
-  // +7 -> +8 is 128 XP. Levelled: spares give 32 + 32, then 64 / 32 = 2 copies. Raw: 2 + 1, 125 / 16 = 8.
-  assert.deepEqual(cell.needs[8], { lo: 2, hi: 8 })
-  // +7 -> +10 is 896 XP: (896 - 64) / 32 = 26; (896 - 3) / 16 = 56.
-  assert.deepEqual(cell.needs[10], { lo: 26, hi: 56 })
+  // +7 -> +8 is 128 XP: the spares give 32 + 32 (6 + 7 Majors), then 2 new copies (4-7 Majors each).
+  assert.deepEqual(cell.needs[8], { copies: 2, majors: { lo: 21, hi: 27 } })
+  // +7 -> +10 is 896 XP: 64 from spares, 832 / 32 = 26 new copies.
+  assert.deepEqual(cell.needs[10], { copies: 26, majors: { lo: 117, hi: 195 } })
 })
 
-test('a piece you do not own: the first copy becomes it, and the totals add up', () => {
+test('a piece below +5 takes Majors itself; a missing piece is one more copy', () => {
   const cells = farmCells(
-    build({ HEAD: { name: 'Golden Efreeti Turban' }, FACE: { name: 'Triumphant Mask' } }),
-    ownedCopies([{ name: 'Triumphant Mask +10', location: 'Face', lane: 'worn' }]),
+    build({ HEAD: { name: 'Golden Efreeti Turban' }, EAR: { name: 'Checkmate' }, FACE: { name: 'Triumphant Mask' } }),
+    ownedCopies([
+      { name: 'Checkmate +4', location: 'Ear', lane: 'worn' },
+      { name: 'Checkmate +4', location: 'General 1', lane: 'bags' },
+      { name: 'Triumphant Mask +10', location: 'Face', lane: 'worn' }
+    ]),
     new Map(),
     { 'golden efreeti turban': { drops: [{ mob: 'Noble Dojorn', zone: 'Plane of Sky' }], quests: [] } }
   )
-  const turban = cells.find((c) => c.item === 'Golden Efreeti Turban')
-  assert.equal(turban?.tier, null)
-  assert.equal(turban?.dropSeen, false)
-  // dropping at +0: 127 XP to +7 -> 1 + ceil(127 / 32) = 5 levelled, 1 + 127 = 128 raw.
-  assert.deepEqual(turban?.needs[7], { lo: 5, hi: 128 })
-  assert.deepEqual(farmTotals(cells)[7], { lo: 5, hi: 128 })
+  const by = (item: string) => cells.find((c) => c.item === item)
+  // Checkmate +4 -> +5: 4 Majors. +5 -> +7: 96 XP; the +4 spare levelled gives 32 (4), then 2 new.
+  assert.deepEqual(by('Checkmate')?.needs[7], { copies: 2, majors: { lo: 16, hi: 22 } })
+  // Turban missing: 1 copy (4-7 Majors to +5), then 96 XP = 3 more.
+  assert.deepEqual(by('Golden Efreeti Turban')?.needs[7], { copies: 4, majors: { lo: 16, hi: 28 } })
+  assert.equal(by('Triumphant Mask')?.needs[10], null)
+  const total = farmTotals(cells)[7]
+  assert.deepEqual(total, { copies: 6, majors: { lo: 32, hi: 50 } })
+  assert.deepEqual([moteVerdict(total, 60), moteVerdict(total, 40), moteVerdict(total, 10)], ['enough', 'maybe', 'short'])
   assert.deepEqual(
     farmTargets(cells, 7).map((t) => t.label),
     ['Noble Dojorn (Plane of Sky)']
   )
 })
 
-test('motes: how many copies the Majors level to +5, and what Greater-and-up add', () => {
-  const s = moteSummary({
-    'Mote of Major Potential': 215,
-    'Mote of Greater Potential': 29,
-    'Mote of Superior Potential': 8,
-    'Mote of Grand Potential': 1,
-    'Mote of Ascendant Potential': 1
-  })
-  // +4 -> +5 is 16 XP = 4 Majors; +0 -> +5 is 31 XP = 7 Majors.
-  assert.deepEqual(s, { majors: 215, boostsFrom4: 53, boostsFrom0: 30, highXp: 29 * 6 + 8 * 7 + 8 + 9 })
+test('motes: Majors held, and what Greater-and-up add outside the plan', () => {
+  assert.deepEqual(
+    moteSummary({
+      'Mote of Major Potential': 215,
+      'Mote of Greater Potential': 29,
+      'Mote of Superior Potential': 8,
+      'Mote of Grand Potential': 1,
+      'Mote of Ascendant Potential': 1
+    }),
+    { majors: 215, highXp: 29 * 6 + 8 * 7 + 8 + 9 }
+  )
 })
