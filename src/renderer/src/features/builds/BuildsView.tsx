@@ -5,7 +5,7 @@
 // compared against: by default the build's own class loadout. Everything decided about the comparison lives in
 // @shared/builds; this file only draws it.
 
-import type { JSX } from 'react'
+import { type JSX, useState } from 'react'
 import {
   Alert,
   Box,
@@ -17,11 +17,13 @@ import {
   Paper,
   Select,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
   Typography
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
@@ -38,6 +40,7 @@ import {
 import { planSlotLabel } from '@shared/planner/types'
 import type { View } from '../../appViews'
 import { useBuilds, type BuildsBridge, type BuildsState } from './useBuilds'
+import FarmView from './FarmView'
 
 const BRIDGE: BuildsBridge = {
   getBuilds: () => window.eq.getBuilds(),
@@ -280,13 +283,19 @@ function CompareTable({ rows, payload }: { rows: CompareRow[]; payload: BuildsPa
 
 function BuildsView(): JSX.Element {
   const state = useBuilds(BRIDGE)
+  const [view, setView] = useState<'compare' | 'farm'>('compare')
   const { payload, selected, rows } = state
   if (payload === null) return <Typography sx={{ p: 2 }}>Loading builds…</Typography>
   return (
     <Stack spacing={2} sx={{ p: 2 }}>
       <Picker state={state} />
       <Notices state={state} payload={payload} />
-      {rows !== null && <CompareTable rows={rows} payload={payload} />}
+      <Tabs value={view} onChange={(_, v: 'compare' | 'farm') => setView(v)} data-testid="builds-view-tabs">
+        <Tab value="compare" label="Compare" />
+        <Tab value="farm" label="Farm" data-testid="builds-tab-farm" />
+      </Tabs>
+      {view === 'compare' && rows !== null && <CompareTable rows={rows} payload={payload} />}
+      {view === 'farm' && selected !== null && <FarmView build={selected} payload={payload} />}
       <Typography variant="caption" color="text.secondary">
         {state.worn !== null ? `Comparing with ${dumpLabel(state.worn)} · ` : ''}Build files: {payload.dir}
         {selected?.url !== undefined ? ` · imported from ${selected.url}` : ''}
