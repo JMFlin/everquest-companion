@@ -1,7 +1,7 @@
-// FarmView: the Builds tab's Farm view: for the selected build, how many more copies of each piece
-// to farm to reach +7, +8, +9 and +10, and where they drop. The arithmetic and every number here
-// come from @shared/buildFarm; this file reads the three inputs (the character's inventory dump,
-// the loot log, the held motes) and draws the result.
+// FarmView: the Builds tab's Farm view. For the selected build, how many more copies of each piece
+// to farm to reach +7, +8, +9 and +10, how many Major motes that takes against the ones you hold,
+// and where the pieces drop. Every number comes from @shared/buildFarm; this file reads the three
+// inputs (the character's inventory dump, the loot log, the held motes) and draws the result.
 
 import { type JSX, useMemo, useState } from 'react'
 import {
@@ -24,21 +24,24 @@ import {
   farmCells,
   farmTargets,
   farmTotals,
-  lootSeen,
+  lootSources,
   moteSummary,
+  moteVerdict,
   ownedCopies,
-  type CopyRange,
   type FarmCell,
   type FarmTier,
-  type OwnedCopy
+  type MoteSummary,
+  type MoteVerdict,
+  type OwnedCopy,
+  type PieceNeed,
+  type Range
 } from '@shared/buildFarm'
 import { planSlotLabel } from '@shared/planner/types'
 import { useCharacterSheet } from '../character/useCharacterSheet'
 import { useProgress } from '../posky/useProgress'
 import { heldMotes } from '../motes/heldMotes'
 
-function rangeText(r: CopyRange | null): string {
-  if (r === null) return '✓'
+function rangeText(r: Range): string {
   return r.lo === r.hi ? String(r.lo) : `${String(r.lo)}-${String(r.hi)}`
 }
 
@@ -60,29 +63,66 @@ function sourcesText(c: FarmCell): string {
   return c.sources.length > 2 ? `${shown.join('; ')} +${String(c.sources.length - 2)}` : shown.join('; ')
 }
 
-function Summary({ cells, motes }: { cells: FarmCell[]; motes: ReturnType<typeof moteSummary> }): JSX.Element {
+const VERDICT_TEXT: Record<MoteVerdict, string> = {
+  enough: 'your Majors cover it: farm copies',
+  maybe: 'Majors may run short, depending on the tiers copies drop at',
+  short: 'not enough Majors: farm copies and motes'
+}
+
+const VERDICT_COLOR: Record<MoteVerdict, string> = {
+  enough: 'success.main',
+  maybe: 'warning.main',
+  short: 'error.main'
+}
+
+function TierTotal({ tier, total, motes }: { tier: FarmTier; total: PieceNeed; motes: MoteSummary }): JSX.Element {
+  const verdict = moteVerdict(total, motes.majors)
+  return (
+    <Box data-testid={`farm-total-${String(tier)}`} sx={{ minWidth: 180 }}>
+      <Typography variant="caption" color="text.secondary">
+        Every piece to +{tier}
+      </Typography>
+      <Typography variant="h6">{total.copies} copies</Typography>
+      <Typography variant="body2">{rangeText(total.majors)} Majors</Typography>
+      {total.copies > 0 || total.majors.hi > 0 ? (
+        <Typography variant="body2" sx={{ color: VERDICT_COLOR[verdict] }}>
+          {VERDICT_TEXT[verdict]}
+        </Typography>
+      ) : null}
+    </Box>
+  )
+}
+
+function Summary({ cells, motes }: { cells: FarmCell[]; motes: MoteSummary }): JSX.Element {
   const totals = farmTotals(cells)
   return (
     <Paper variant="outlined" sx={{ p: 2 }} data-testid="farm-summary">
       <Stack direction="row" spacing={4} sx={{ mb: 1 }}>
         {FARM_TIERS.map((t) => (
-          <Box key={t}>
-            <Typography variant="caption" color="text.secondary">
-              Copies to farm, every piece to +{t}
-            </Typography>
-            <Typography variant="h6" data-testid={`farm-total-${String(t)}`}>
-              {rangeText(totals[t])}
-            </Typography>
-          </Box>
+          <TierTotal key={t} tier={t} total={totals[t]} motes={motes} />
         ))}
       </Stack>
       <Typography variant="body2" color="text.secondary">
-        Low end: every copy levelled to +{BOOST_TIER} with Major motes before it merges. High end: merged
-        as it drops. Your {motes.majors} Majors level about {motes.boostsFrom4} copies dropping at +4, or{' '}
-        {motes.boostsFrom0} at +0. Greater-and-up motes ({motes.highXp} XP) go straight onto pieces and are
-        not in the counts.
+        Every copy drops at +0 to +4. Levelled to +{BOOST_TIER} with Major motes it merges for 32 XP, so the
+        copy count is exact and the Majors are a range: 4 per copy that drops at +4, 7 per copy at +0. You
+        hold {motes.majors} Majors. Greater-and-up motes ({motes.highXp} XP) go straight onto pieces and are
+        not counted.
       </Typography>
     </Paper>
+  )
+}
+
+function NeedCell({ c, tier }: { c: FarmCell; tier: FarmTier }): JSX.Element {
+  const need = c.needs[tier]
+  return (
+    <TableCell
+      align="right"
+      data-testid={`farm-need-${c.cell}-${String(tier)}`}
+      title={need === null ? 'Already there' : `${rangeText(need.majors)} Majors`}
+      sx={{ whiteSpace: 'nowrap', color: need === null ? 'success.main' : undefined }}
+    >
+      {need === null ? '✓' : need.copies}
+    </TableCell>
   )
 }
 
@@ -96,9 +136,8 @@ function CellTable({ cells }: { cells: FarmCell[] }): JSX.Element {
             <TableCell>Item</TableCell>
             <TableCell>Now</TableCell>
             <TableCell>Spares</TableCell>
-            <TableCell>Drops at</TableCell>
             {FARM_TIERS.map((t) => (
-              <TableCell key={t} align="right">
+              <TableCell key={t} align="right" title="Copies to farm; hover a number for the Majors it takes">
                 +{t}
               </TableCell>
             ))}
@@ -124,22 +163,8 @@ function CellTable({ cells }: { cells: FarmCell[] }): JSX.Element {
                 )}
               </TableCell>
               <TableCell sx={{ whiteSpace: 'nowrap' }}>{sparesText(c.spares)}</TableCell>
-              <TableCell
-                sx={{ whiteSpace: 'nowrap', color: c.dropSeen ? undefined : 'text.secondary' }}
-                title={c.dropSeen ? 'The tier copies most often looted at' : 'Never looted: assumed +0'}
-              >
-                +{c.dropTier}
-                {c.dropSeen ? '' : '?'}
-              </TableCell>
               {FARM_TIERS.map((t) => (
-                <TableCell
-                  key={t}
-                  align="right"
-                  data-testid={`farm-need-${c.cell}-${String(t)}`}
-                  sx={{ whiteSpace: 'nowrap', color: c.needs[t] === null ? 'success.main' : undefined }}
-                >
-                  {rangeText(c.needs[t])}
-                </TableCell>
+                <NeedCell key={t} c={c} tier={t} />
               ))}
               <TableCell sx={{ color: 'text.secondary' }}>{sourcesText(c)}</TableCell>
             </TableRow>
@@ -174,15 +199,15 @@ function Targets({ cells }: { cells: FarmCell[] }): JSX.Element {
       </Stack>
       {targets.length === 0 ? (
         <Typography variant="body2" color="success.main">
-          Every piece you own is at +{target} or above.
+          Nothing to farm for +{target}.
         </Typography>
       ) : (
         targets.map((t) => (
           <Typography key={t.label} variant="body2" sx={{ mb: 0.5 }}>
             <b>{t.label}</b>
-            {t.looted > 0 ? ` · looted build pieces ×${String(t.looted)}` : ''}
+            {t.looted > 0 ? ` · you looted build pieces here ×${String(t.looted)}` : ''}
             {' · '}
-            {t.items.map((i) => `${i.item} (${planSlotLabel(i.cell)}) ${rangeText(i.range)}`).join(', ')}
+            {t.items.map((i) => `${i.item} (${planSlotLabel(i.cell)}) ${String(i.copies)}`).join(', ')}
           </Typography>
         ))
       )}
@@ -194,9 +219,9 @@ export default function FarmView({ build, payload }: { build: Build; payload: Bu
   const { sheet } = useCharacterSheet()
   const { lootHistory, itemOverrides } = useProgress()
   const owned = useMemo(() => ownedCopies(sheet?.carry.rows ?? []), [sheet])
-  const seen = useMemo(() => lootSeen(lootHistory), [lootHistory])
+  const looted = useMemo(() => lootSources(lootHistory), [lootHistory])
   const motes = useMemo(() => moteSummary(heldMotes(lootHistory, itemOverrides)), [lootHistory, itemOverrides])
-  const cells = useMemo(() => farmCells(build, owned, seen, payload.sources), [build, owned, seen, payload])
+  const cells = useMemo(() => farmCells(build, owned, looted, payload.sources), [build, owned, looted, payload])
   if (sheet === null) {
     return <Typography color="text.secondary">No inventory dump yet: type /outputfile inventory in game.</Typography>
   }
@@ -206,8 +231,8 @@ export default function FarmView({ build, payload }: { build: Build; payload: Bu
       <CellTable cells={cells} />
       <Targets cells={cells} />
       <Typography variant="caption" color="text.secondary">
-        Main pieces only; exaltation donors are not planned here. Inventory: the newest dump. Drop tiers and
-        sources: your loot log.
+        Main pieces only; exaltation donors are not planned here. Inventory: the newest dump. Sources: your
+        loot log, then the item database.
       </Typography>
     </Stack>
   )

@@ -10,7 +10,7 @@ Builds overlay shows only the cells that still differ.
 | Module | Owns |
 |---|---|
 | [`src/shared/builds.ts`](../../src/shared/builds.ts) | The build file format and its one validator (`parseBuildFile`), the worn cells read off a dump (`wornCells`), the comparison (`compareBuild`), source lines. Pure, node-tested. |
-| [`src/shared/buildFarm.ts`](../../src/shared/buildFarm.ts) | The Farm view's model: copies still to farm per piece for +7 to +10 (a low–high range), from the dump's copies, the loot log's drop tiers and sources, and the held motes. Pure, node-tested. |
+| [`src/shared/buildFarm.ts`](../../src/shared/buildFarm.ts) | The Farm view's model: copies to farm and Major motes needed per piece for +7 to +10, from the dump's copies, the loot log's sources and the held motes. Pure, node-tested. |
 | [`src/main/ipc/builds.ts`](../../src/main/ipc/builds.ts) | `builds:get`: reads `<userData>/builds/*.json`, validates each file, resolves every named item's source from the committed corpus, adds the active character's worn cells. |
 | [`src/main/wornLoadouts.ts`](../../src/main/wornLoadouts.ts) | Files each dump under the class loadout a `/who` row beside it names (`<userData>/worn-loadouts/<Name>_<server>/<CLS-CLS-CLS>.json`), and reads those copies back. |
 | [`src/renderer/src/features/builds/`](../../src/renderer/src/features/builds/) | `useBuilds` (payload + selection, shared with the overlay) and the tab. |
@@ -55,11 +55,12 @@ The tab's Farm view also reads the character sheet (all dump rows), the loot log
   holding that loadout's newest dump, plus the newest dump on its own while no `/who` named its
   loadout. A build opens on its own loadout; with no dump of that loadout saved yet it compares
   the newest dump and says so. Older dumps of a loadout are not kept.
-- **Farm counts are ranges.** A copy at +t merges for 2^t XP; a Major mote (cap +4) can level a
-  spare to +5 first, worth 32. The low end assumes every copy is levelled to +5, the high end that
-  copies merge as they drop at the item's usual looted tier. The piece is the best copy worn or on
-  the Equipment key ring; bag, bank and hoard copies are spares. Greater-and-up motes are shown,
-  not subtracted. Exaltation donors are not planned.
+- **Farm: copies exact, Majors a range.** Any copy drops at +0 to +4. A Major mote (5 XP, cap
+  +4) levels a copy to +5, and a +5 copy merges for 32 XP at any tier, so copies needed = XP gap / 32
+  and the Majors are 4 per copy that drops at +4 up to 7 per copy at +0. The summary compares that
+  range with the Majors held: enough (farm copies), maybe, or short (farm copies and motes). The
+  piece is the best copy worn or on the Equipment key ring; bag, bank and hoard copies are spares,
+  used first. Greater-and-up motes are shown, not subtracted. Exaltation donors are not planned.
 - **No cache, no file watcher.** The tab and overlay re-read on open, on Reload, on a dump
   re-read and (overlay) on a character switch.
 
