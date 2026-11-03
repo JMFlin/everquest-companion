@@ -5,7 +5,7 @@
 **Motes** feature (scan, auto rescan, upgrade planner), the **Builds** tab and overlay
 ([`docs/plans/builds.md`](docs/plans/builds.md)), two additions to the Sky Cleanup tab (a
 **Can destroy** count that keeps 3 extra turn-ins' worth, and a table of Sky drops no quest
-uses), and the build changes below. These
+uses, with class epic pieces kept in and marked on both tables), and the build changes below. These
 changes are not headed upstream, so the fork tracks upstream by merging, not by sending PRs.
 
 ## Building and installing

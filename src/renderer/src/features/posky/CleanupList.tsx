@@ -39,6 +39,7 @@ import { type JSX, useCallback, useMemo } from 'react'
 import {
   Alert,
   Box,
+  Chip,
   Stack,
   Table,
   TableBody,
@@ -68,7 +69,13 @@ import {
   type CleanupTurnIn,
   type DumpLocations
 } from './cleanup'
-import { nonQuestDropRows, skyNonQuestDrops, type NonQuestDropRow } from './nonQuestDrops'
+import {
+  epicClassesOf,
+  epicLabel,
+  nonQuestDropRows,
+  skyNonQuestDrops,
+  type NonQuestDropRow
+} from './nonQuestDrops'
 import { dropperLabel } from './poskyDroppers'
 
 /** Nothing anywhere claims to know where an item is. Module-scope so it is identity-stable. */
@@ -81,6 +88,21 @@ export interface CleanupListProps {
   inventoryLoadedAt: number | null
   /** an item name → the Loot tab's drill-down; absent leaves the names hoverable but unlinked */
   onOpenLoot?: (item: string) => void
+}
+
+/** The warning beside an item a class epic needs. Nothing when no epic does. */
+function EpicMark({ classes }: { classes: readonly string[] }): JSX.Element | null {
+  if (classes.length === 0) return null
+  return (
+    <Chip
+      size="small"
+      color="warning"
+      variant="outlined"
+      label={epicLabel(classes)}
+      data-testid="posky-epic-mark"
+      sx={{ ml: 1 }}
+    />
+  )
 }
 
 /** One quest this item feeds, and the case for keeping the item instead of destroying it. */
@@ -145,6 +167,7 @@ function CleanupItemRow({
             be claimed by several quests with different stated `where`s, so there is no ONE quest
             row to build it from. The card still draws the item window and what else it is for. */}
         <ItemNameLink name={row.name} onOpenLoot={onOpenLoot} />
+        <EpicMark classes={epicClassesOf(row.name)} />
       </TableCell>
       <TableCell data-testid="posky-cleanup-qty" sx={{ verticalAlign: 'top' }}>
         x{row.quantity}
@@ -181,7 +204,7 @@ function NonQuestDropsTable({
   return (
     <Box data-testid="posky-nonquest" sx={{ mt: 3 }}>
       <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        Sky drops no quest uses ({rows.length})
+        Sky drops no quest uses, epic pieces marked ({rows.length})
       </Typography>
       <Table size="small">
         <TableHead>
@@ -202,6 +225,7 @@ function NonQuestDropsTable({
             >
               <TableCell sx={{ fontWeight: row.held > 0 ? 600 : undefined }}>
                 <ItemNameLink name={row.name} onOpenLoot={onOpenLoot} />
+                <EpicMark classes={row.epics} />
               </TableCell>
               <TableCell>{row.held > 0 ? `x${String(row.held)}` : ''}</TableCell>
               <TableCell sx={{ color: 'text.secondary' }}>
