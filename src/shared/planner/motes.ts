@@ -14,6 +14,8 @@
 // - Condense: 2 motes of tier n -> 1 of tier n+1, producing at most Ascendant. Spell value is
 //   conserved by condensing (spellXp doubles per tier); gear XP is lost or kept, never gained —
 //   condensing only ever helps gear by raising the cap. Off unless the gear selection opts in.
+// - Mote cap: `maxMote` (an index into MOTES) keeps every held mote above it out of the pool; they
+//   stay in `remaining`. Condensing may still build higher tiers out of the motes below it.
 //
 // ALLOCATION (one shared pool)
 // 1. Gear first (`moteGearSearch.ts`). DP over (pool, the piece's XP, every spare copy's XP) tier
@@ -227,17 +229,23 @@ function section(sel: Selection, steps: Step[], xp: number, target: number): Sec
 
 export function planMotes(
   held: Partial<Record<MoteName, number>>,
-  sel: { spell?: Selection; gear?: GearSelection }
+  sel: { spell?: Selection; gear?: GearSelection },
+  maxMote: number = MOTES.length - 1
 ): MotePlan {
   if (sel.spell) validateSelection(sel.spell, 'spell')
   if (sel.gear) {
     validateSelection(sel.gear, 'gear')
     validateSpares(sel.gear.spares ?? [])
   }
-  const counts = MOTES.map((m) => held[m.name] ?? 0)
+  if (!Number.isInteger(maxMote) || maxMote < 0 || maxMote >= MOTES.length) {
+    throw new Error(`maxMote must be an integer 0..${MOTES.length - 1}, got ${maxMote}`)
+  }
+  const counts = MOTES.map((m, i) => (i <= maxMote ? (held[m.name] ?? 0) : 0))
   const gear = sel.gear ? planGear(counts, sel.gear) : undefined
   const spell = sel.spell ? planSpell(counts, sel.spell) : undefined
-  const remaining = Object.fromEntries(MOTES.map((m, i) => [m.name, counts[i]])) as Record<MoteName, number>
+  const remaining = Object.fromEntries(
+    MOTES.map((m, i) => [m.name, counts[i] + (i > maxMote ? (held[m.name] ?? 0) : 0)])
+  ) as Record<MoteName, number>
   return { ...(spell ? { spell } : {}), ...(gear ? { gear } : {}), remaining }
 }
 

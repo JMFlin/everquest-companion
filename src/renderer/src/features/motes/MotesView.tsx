@@ -11,12 +11,14 @@ import {
   Checkbox,
   Chip,
   FormControlLabel,
+  MenuItem,
   Paper,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableRow,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography
@@ -182,6 +184,21 @@ export default function MotesView(): JSX.Element {
             }
             label="Condense motes"
           />
+          <TextField
+            select
+            size="small"
+            label="Use motes up to"
+            value={p.maxMote}
+            onChange={(e) => p.setMaxMote(Number(e.target.value))}
+            sx={{ minWidth: 180 }}
+            data-testid="motes-max-mote"
+          >
+            {MOTES.map((m, i) => (
+              <MenuItem key={m.name} value={i}>
+                {shortMote(m.name)}
+              </MenuItem>
+            ))}
+          </TextField>
         </Stack>
         {scan && <ScanPreview result={scan} onClose={() => setScan(null)} />}
         <Alert severity="info" sx={{ my: 1 }}>

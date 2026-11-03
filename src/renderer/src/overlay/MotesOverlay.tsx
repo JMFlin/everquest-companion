@@ -98,6 +98,27 @@ function Check(props: { checked: boolean; onChange: (c: boolean) => void; testId
   )
 }
 
+/** The highest mote the plans may use. */
+function MaxMote(props: { value: number; onChange: (i: number) => void }): JSX.Element {
+  return (
+    <label style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      Up to
+      <select
+        value={props.value}
+        onChange={(e) => props.onChange(Number(e.target.value))}
+        data-testid="motes-overlay-max-mote"
+        style={{ background: '#1b1f25', color: '#f2f2f2', border: `1px solid ${GOLD}`, fontSize: 11 }}
+      >
+        {MOTES.map((m, i) => (
+          <option key={m.name} value={i}>
+            {shortMote(m.name)}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 /** "Progress at +N: [ x ] / 2^N" — XP already banked toward the next rank or tier. */
 function ProgressPlain(props: { from: number; fraction: number; onFraction: (f: number) => void }): JSX.Element {
   const step = 2 ** props.from
@@ -212,6 +233,7 @@ export default function MotesOverlay(): JSX.Element {
           <Check checked={p.condense} onChange={p.setCondense} testId="motes-overlay-condense">
             Condense motes
           </Check>
+          <MaxMote value={p.maxMote} onChange={p.setMaxMote} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: 12, margin: '6px 0' }}>
           {MOTES.map((m) => (

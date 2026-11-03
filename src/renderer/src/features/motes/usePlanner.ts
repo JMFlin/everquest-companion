@@ -1,9 +1,9 @@
 // usePlanner — the upgrade planner's state and plan, shared by the Motes tab (MUI) and the motes
 // overlay (plain divs): rank picks for a spell and a gear piece, the gear's banked progress,
-// spare copies and whether to condense. Each surface only draws it.
+// spare copies, whether to condense and the highest mote the plans may use. Each surface only draws it.
 
 import { useMemo, useState } from 'react'
-import { planMotes } from '@shared/planner/motes'
+import { MOTES, planMotes } from '@shared/planner/motes'
 import type { MoteName, MotePlan, Selection, Step, StepGroup } from '@shared/planner/motes'
 
 export interface RankPick {
@@ -30,6 +30,8 @@ export interface Planner {
   spares: number[]
   /** Whether the gear plan may condense motes (off unless ticked). */
   condense: boolean
+  /** Highest mote (index into MOTES) the plans may use; held motes above it are left over. */
+  maxMote: number
   plan: MotePlan
   pickSpell: (n: number) => void
   pickGear: (n: number) => void
@@ -37,6 +39,7 @@ export interface Planner {
   setFraction: (fraction: number) => void
   setSpares: (spares: number[]) => void
   setCondense: (condense: boolean) => void
+  setMaxMote: (maxMote: number) => void
 }
 
 export function usePlanner(held: Partial<Record<MoteName, number>>): Planner {
@@ -47,13 +50,14 @@ export function usePlanner(held: Partial<Record<MoteName, number>>): Planner {
   const [fraction, setFraction] = useState(0)
   const [spares, setSpares] = useState<number[]>([])
   const [condense, setCondense] = useState(false)
+  const [maxMote, setMaxMote] = useState(MOTES.length - 1)
   const plan = useMemo(
     () =>
       planMotes(held, {
         spell: spell.sel ? { ...spell.sel, fraction: spellFraction } : undefined,
         gear: gear.sel ? { ...gear.sel, fraction, spares, condense } : undefined
-      }),
-    [held, spell, gear, spellFraction, fraction, spares, condense]
+      }, maxMote),
+    [held, spell, gear, spellFraction, fraction, spares, condense, maxMote]
   )
   return {
     spell,
@@ -62,6 +66,7 @@ export function usePlanner(held: Partial<Record<MoteName, number>>): Planner {
     fraction,
     spares,
     condense,
+    maxMote,
     plan,
     pickSpell: (n) => {
       const next = nextPick(spell, n)
@@ -76,7 +81,8 @@ export function usePlanner(held: Partial<Record<MoteName, number>>): Planner {
     },
     setFraction,
     setSpares,
-    setCondense
+    setCondense,
+    setMaxMote
   }
 }
 

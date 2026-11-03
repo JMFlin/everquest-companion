@@ -31,7 +31,7 @@ off logging, the app simply has nothing to show.
   Tick **Auto rescan** (remembered between sessions) and the app checks the game right away and
   then every 45 s (a countdown shows the next check), re-reading the window whenever it is open.
   The upgrade planner takes a spell's or gear piece's current rank and goal and lists which motes
-  to apply, wasting the least XP. The scan is a screenshot of the game window read by local OCR —
+  to apply, wasting the least XP; **Use motes up to** keeps higher motes out of the plan. The scan is a screenshot of the game window read by local OCR —
   nothing leaves your machine.
 - **Builds** — save gear builds (import a loadoutlegends.com character, or write a small JSON
   file) and compare one against what you wear. Each dump is saved per class loadout when a `/who`
