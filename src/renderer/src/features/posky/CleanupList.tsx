@@ -68,6 +68,8 @@ import {
   type CleanupTurnIn,
   type DumpLocations
 } from './cleanup'
+import { nonQuestDropRows, skyNonQuestDrops, type NonQuestDropRow } from './nonQuestDrops'
+import { dropperLabel } from './poskyDroppers'
 
 /** Nothing anywhere claims to know where an item is. Module-scope so it is identity-stable. */
 export const NO_DUMP_LOCATIONS: DumpLocations = {}
@@ -168,6 +170,52 @@ function CleanupItemRow({
   )
 }
 
+/** Sky drops no quest requires: what you hold of each first, then the rest of the list. */
+function NonQuestDropsTable({
+  rows,
+  onOpenLoot
+}: {
+  rows: readonly NonQuestDropRow[]
+  onOpenLoot?: (item: string) => void
+}): JSX.Element {
+  return (
+    <Box data-testid="posky-nonquest" sx={{ mt: 3 }}>
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        Sky drops no quest uses ({rows.length})
+      </Typography>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell>Item</TableCell>
+            <TableCell>Held</TableCell>
+            <TableCell>Where</TableCell>
+            <TableCell>Dropped by</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow
+              key={row.key}
+              data-testid="posky-nonquest-row"
+              data-item={row.name}
+              data-count={row.held}
+            >
+              <TableCell sx={{ fontWeight: row.held > 0 ? 600 : undefined }}>
+                <ItemNameLink name={row.name} onOpenLoot={onOpenLoot} />
+              </TableCell>
+              <TableCell>{row.held > 0 ? `x${String(row.held)}` : ''}</TableCell>
+              <TableCell sx={{ color: 'text.secondary' }}>
+                {row.held > 0 ? locationsLine(row.locations) : ''}
+              </TableCell>
+              <TableCell sx={{ color: 'text.secondary' }}>{dropperLabel(row.droppers)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
+  )
+}
+
 /**
  * THE TAB.
  *
@@ -189,6 +237,10 @@ export default function CleanupList({
 
   const locations = useMemo(() => dumpLocationsFrom(sheet?.carry.rows), [sheet])
   const rows = useMemo(() => cleanupRowsFor(quests, locations), [quests, locations])
+  const nonQuestRows = useMemo(
+    () => nonQuestDropRows(skyNonQuestDrops(), locations),
+    [locations]
+  )
   const tierOf = useCallback(
     (reward: string | undefined) => (reward ? observedTierOf(tiers, reward) : undefined),
     [tiers]
@@ -253,6 +305,7 @@ export default function CleanupList({
             </Table>
           </>
         )}
+        <NonQuestDropsTable rows={nonQuestRows} onOpenLoot={onOpenLoot} />
       </Box>
     </Box>
   )
