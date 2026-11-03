@@ -6,6 +6,10 @@
 // quest in the wiki catalog (quests.json), since a handful of Sky drops (Bird Whistle, the Key of
 // Swords) are turn-ins for quests outside the Sky tracker.
 //
+// EPIC QUESTS ARE THE EXCEPTION. A drop that only class epics require (Blade of Abrogation, Spiroc
+// Feathers) is listed anyway, marked with the epic's class, because it is the drop a player most
+// needs to see before deleting. The same mark goes on the Cleanup table's own rows.
+//
 // "Requires" means a turn-in item. A quest REWARD that also drops is still listed: handing it out
 // does not make anyone want it back.
 //
@@ -27,6 +31,34 @@ export interface NonQuestDrop {
   /** the catalog's spelling, `+N` stripped */
   name: string
   droppers: readonly DropperMob[]
+  /** classes whose epic quest requires it; empty for most drops */
+  epics: readonly string[]
+}
+
+/** A quest from the wiki catalog, as far as this module reads it. */
+export interface CatalogQuest {
+  name: string
+  requiredItems?: readonly string[]
+}
+
+/** item counting key → the classes whose epic requires it. */
+export type EpicClasses = ReadonlyMap<string, readonly string[]>
+
+const EPIC_QUEST = /^(.+) Epic Quest$/
+
+/** The catalog names each class epic `<Class> Epic Quest`; index their turn-ins by class. */
+export function epicClassesByItem(quests: readonly CatalogQuest[]): EpicClasses {
+  const out = new Map<string, string[]>()
+  for (const q of quests) {
+    const cls = EPIC_QUEST.exec(q.name)?.[1]
+    if (!cls) continue
+    for (const name of q.requiredItems ?? []) {
+      const classes = out.get(dropKey(name)) ?? []
+      if (!classes.includes(cls)) classes.push(cls)
+      out.set(dropKey(name), classes)
+    }
+  }
+  return out
 }
 
 /** A non-quest drop with what the loaded export says you hold of it. */
@@ -46,10 +78,14 @@ function toDropper(m: MobEntry): DropperMob {
   return dropper
 }
 
-/** Every item `mobs` drop whose key is not in `required`, sorted by name. */
+/**
+ * Every item `mobs` drop whose key is not in `required`, sorted by name. `required` holds the
+ * non-epic turn-ins; `epics` marks the rows class epics want.
+ */
 export function nonQuestDrops(
   mobs: readonly MobEntry[],
-  required: Iterable<string>
+  required: Iterable<string>,
+  epics: EpicClasses
 ): NonQuestDrop[] {
   const wanted = new Set<string>()
   for (const name of required) wanted.add(dropKey(name))
@@ -67,7 +103,12 @@ export function nonQuestDrops(
     }
   }
   return [...byKey]
-    .map(([key, e]) => ({ key, name: e.name, droppers: [...e.droppers].sort(dropperNameOrder) }))
+    .map(([key, e]) => ({
+      key,
+      name: e.name,
+      droppers: [...e.droppers].sort(dropperNameOrder),
+      epics: epics.get(key) ?? []
+    }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
@@ -85,13 +126,31 @@ export function nonQuestDropRows(
 }
 
 let SKY_NON_QUEST: NonQuestDrop[] | null = null
+let EPICS: EpicClasses | null = null
+
+function catalogEpics(): EpicClasses {
+  EPICS ??= epicClassesByItem(questsJson.quests)
+  return EPICS
+}
+
+/** The classes whose epic requires this item, from the committed quest catalog. */
+export function epicClassesOf(name: string): readonly string[] {
+  return catalogEpics().get(dropKey(name)) ?? []
+}
 
 /** The committed data's answer, computed once on first use. */
 export function skyNonQuestDrops(): readonly NonQuestDrop[] {
   if (SKY_NON_QUEST) return SKY_NON_QUEST
   const required: string[] = []
   for (const q of poskyJson.quests) for (const it of q.items) required.push(it.name)
-  for (const q of questsJson.quests) required.push(...(q.requiredItems ?? []))
-  SKY_NON_QUEST = nonQuestDrops(skyMobs(), required)
+  for (const q of questsJson.quests) {
+    if (!EPIC_QUEST.test(q.name)) required.push(...(q.requiredItems ?? []))
+  }
+  SKY_NON_QUEST = nonQuestDrops(skyMobs(), required, catalogEpics())
   return SKY_NON_QUEST
+}
+
+/** `Necromancer epic`, `Magician, Necromancer epics` — the mark a row carries. */
+export function epicLabel(classes: readonly string[]): string {
+  return `${classes.join(', ')} epic${classes.length === 1 ? '' : 's'}`
 }
