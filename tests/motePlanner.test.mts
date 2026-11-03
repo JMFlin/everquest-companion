@@ -369,3 +369,17 @@ test('several spares stay fast', () => {
     condense: true
   })
 })
+
+test('maxMote keeps every held mote above it out of the plan and in remaining', () => {
+  const cap = idx('Mote of Greater Potential')
+  const plan = planMotes(OWNER, { spell: { from: 0, to: 10 }, gear: { from: 0, to: 6 } }, cap)
+  for (const section of [plan.spell, plan.gear] as SectionPlan[]) {
+    for (const s of section.steps) if (s.kind === 'apply') assert.ok(idx(s.mote) <= cap, s.mote)
+  }
+  for (const name of NAMES.slice(cap + 1)) assert.equal(plan.remaining[name], OWNER[name] ?? 0)
+})
+
+test('maxMote out of range is rejected', () => {
+  assert.throws(() => planMotes(OWNER, {}, MOTES.length), /maxMote/)
+  assert.throws(() => planMotes(OWNER, {}, -1), /maxMote/)
+})
