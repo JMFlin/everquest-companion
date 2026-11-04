@@ -322,6 +322,12 @@ docs/agents-archive.md.
 - Commits: integrator commits per wave, detailed messages,
   `Co-Authored-By: Claude`. Keep `npm run dev` (watch) running — main edits
   auto-relaunch, renderer edits HMR.
+- **ALWAYS SHIP AND REBUILD (fork owner rule, 2026-11-04).** When a change is
+  done and its gates pass, don't stop at a branch: merge it to `main` via a PR
+  on `JMFlin/everquest-companion`, push it to GitHub, then `npm run dist:fork`,
+  install the new `release/<version>/` setup exe silently (`/S`) over the
+  running app (stop `EQ Legends Companion` and `engined` first) and relaunch
+  it. No asking first. See FORK.md.
 
 - A native .node binding resolves its DLL imports from ITS OWN directory before
   System32 (measured via process.report sharedObjects, JOS-274) - app-local CRT
