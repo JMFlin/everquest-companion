@@ -184,7 +184,7 @@ function CellTable({ cells, recipes }: { cells: FarmCell[]; recipes: Recipes }):
 }
 
 function rowText(r: FarmRow): string {
-  const count = r.count === undefined ? '' : ` ×${String(r.count)}`
+  const count = ` ×${String(r.count)}`
   const forPiece = r.forPiece === undefined ? '' : ` for ${r.forPiece}`
   return `${count}${forPiece}${r.mobs.length === 0 ? '' : ` - ${r.mobs.join(', ')}`}`
 }
