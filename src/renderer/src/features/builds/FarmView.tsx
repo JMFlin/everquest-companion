@@ -210,10 +210,7 @@ function Targets({ cells }: { cells: FarmCell[] }): JSX.Element {
             </Typography>
             {z.targets.map((t) => (
               <Typography key={t.mob} variant="body2" sx={{ mb: 0.5, pl: 1 }}>
-                <b>{t.mob}</b>
-                {t.looted > 0 ? ` · you looted build pieces here ×${String(t.looted)}` : ''}
-                {' · '}
-                {t.items.map((i) => `${i.item} (${planSlotLabel(i.cell)}) ${String(i.copies)}`).join(', ')}
+                <b>{t.items.map((i) => i.item).join(', ')}</b> - {t.mob}
               </Typography>
             ))}
           </Box>

@@ -322,6 +322,7 @@ docs/agents-archive.md.
 - Commits: integrator commits per wave, detailed messages,
   `Co-Authored-By: Claude`. Keep `npm run dev` (watch) running — main edits
   auto-relaunch, renderer edits HMR.
+- **Fork: always ship and rebuild the app**, unasked. FORK.md.
 
 - A native .node binding resolves its DLL imports from ITS OWN directory before
   System32 (measured via process.report sharedObjects, JOS-274) - app-local CRT

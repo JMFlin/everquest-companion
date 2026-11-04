@@ -28,6 +28,18 @@ two ways:
   release the build is based on, plus the number of fork commits on top. It is stamped into
   the packaged app only. `package.json` stays `0.1.0`, as it does upstream.
 
+## Always ship and rebuild
+
+Owner rule (2026-11-04): the installed build is the one that gets used, so finished work isn't
+done until it's in it. When a change's gates pass, without asking first:
+
+1. Open a PR on `JMFlin/everquest-companion`, squash-merge it to `main`, sync the local `main`
+   and delete the branch.
+2. `git fetch upstream; npm run dist:fork`.
+3. Stop `EQ Legends Companion` and `engined`, run the new
+   `release\<version>\everquest-companion-Setup-<version>.exe /S`, and relaunch
+   `%LOCALAPPDATA%\Programs\everquest-companion\EQ Legends Companion.exe`.
+
 ## Syncing with upstream
 
 Merge after every upstream release, and in between whenever convenient. Small, frequent
@@ -56,7 +68,8 @@ code edits an upstream file, so:
 - **Edit upstream files only to register fork code**, such as an IPC channel, a nav entry, a
   store key or an overlay kind. Add lines; don't reshape upstream code around them.
 - **Leave `package.json`'s version, `AGENTS.md` and upstream's workflows alone.** AGENTS.md has
-  a word-count test, and the workflows need upstream's secrets. GitHub Actions is disabled on
+  a word-count test (its one fork line points at "Always ship and rebuild"), and the workflows
+  need upstream's secrets. GitHub Actions is disabled on
   this repo for that reason.
 - **Document the fork here**, not in upstream's docs, apart from the one pointer in
   `README.md`.
