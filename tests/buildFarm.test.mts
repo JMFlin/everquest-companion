@@ -86,7 +86,7 @@ test('a piece below +5 takes Majors itself; a missing piece is one more copy', (
   assert.deepEqual(total, { copies: 6, majors: { lo: 32, hi: 50 } })
   assert.deepEqual([moteVerdict(total, 60), moteVerdict(total, 40), moteVerdict(total, 10)], ['enough', 'maybe', 'short'])
   assert.deepEqual(farmTargets(cells, 7, new Map()), [
-    { zone: 'The Plane of Sky', looted: 0, rows: [{ item: 'Golden Efreeti Turban', mobs: ['Noble Dojorn'] }] }
+    { zone: 'The Plane of Sky', looted: 0, rows: [{ item: 'Golden Efreeti Turban', count: 4, mobs: ['Noble Dojorn'] }] }
   ])
 })
 
@@ -114,11 +114,11 @@ test('farm targets: grouped by zone, looted zones first, one zone spelled two wa
       zone: 'The Plane of Hate',
       looted: 1,
       rows: [
-        { item: 'Checkmate', mobs: ['a hate guard'] },
-        { item: 'Turban', mobs: ['a hate lord'] }
+        { item: 'Checkmate', count: 4, mobs: ['a hate guard'] },
+        { item: 'Turban', count: 4, mobs: ['a hate lord'] }
       ]
     },
-    { zone: 'The Plane of Sky', looted: 0, rows: [{ item: 'Turban', mobs: ['Noble Dojorn'] }] }
+    { zone: 'The Plane of Sky', looted: 0, rows: [{ item: 'Turban', count: 4, mobs: ['Noble Dojorn'] }] }
   ])
 })
 

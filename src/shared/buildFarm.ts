@@ -285,8 +285,8 @@ export interface FarmRow {
   item: string
   /** the build piece a quest component is turned in for; absent when `item` is the piece */
   forPiece?: string
-  /** quest components still to gather; absent when `item` is the piece */
-  count?: number
+  /** copies of the piece still to farm, or of a quest component still to gather */
+  count: number
   /** looted-from first */
   mobs: string[]
 }
@@ -343,7 +343,7 @@ export function farmTargets(
     if (need === null || need.copies === 0) continue
     const piece = { cell: c.cell, copies: need.copies }
     for (const s of c.sources) {
-      const r = rowIn(s.zone, c.cell, piece, { item: c.item, mobs: [] })
+      const r = rowIn(s.zone, c.cell, piece, { item: c.item, count: need.copies, mobs: [] })
       r.mobs.set(s.mob, (r.mobs.get(s.mob) ?? 0) + s.count)
     }
     for (const q of recipes.get(itemNameKey(c.item))?.components ?? []) {

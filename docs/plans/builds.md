@@ -61,7 +61,7 @@ The tab's Farm view also reads the character sheet (all dump rows), the loot log
   range with the Majors held: enough (farm copies), maybe, or short (farm copies and motes). The
   piece is the best copy worn or on the Equipment key ring; bag, bank and hoard copies are spares,
   used first. Greater-and-up motes are shown, not subtracted. Exaltation donors are not planned.
-- **Farm: where, by zone.** One row per piece under each zone it drops in; zone names fold
+- **Farm: where, by zone.** One row per piece (copies to farm) under each zone it drops in; zone names fold
   instance and tier (`zonePlace`), and a drop with no zone takes the wiki mob catalog's, or is
   left out. A Plane of Sky reward lists each turn-in item still to gather (copies × count, less
   held) with its droppers and island, under The Plane of Sky.
