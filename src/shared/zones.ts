@@ -115,16 +115,17 @@ const SEPARATORS_RE = /[\s-]+/g
 /** The one leading article EQ zone names use. */
 const LEADING_ARTICLE_RE = /^the /
 
+function stripInstance(zone: string): string {
+  return zone.replace(SOLO_GROUP_RE, '').replace(TIER_ORDINAL_RE, '').replace(TIER_PAREN_RE, '')
+}
+
 /**
  * Canonical key for a zone name, from ANY of the three sources. Case-insensitive, instance noise
  * stripped, leading article folded, separators normalized. Never throws; a nullish/blank name
  * folds to `''`.
  */
 export function zoneKey(zone: string | undefined | null): string {
-  return (zone ?? '')
-    .replace(SOLO_GROUP_RE, '')
-    .replace(TIER_ORDINAL_RE, '')
-    .replace(TIER_PAREN_RE, '')
+  return stripInstance(zone ?? '')
     .toLowerCase()
     .replace(SEPARATORS_RE, ' ')
     .trim()
@@ -484,6 +485,15 @@ export function zoneEntryFor(raw: string | undefined | null): ZoneEntry | null {
   const key = zoneKey(raw)
   if (key === '') return null
   return index().get(key) ?? null
+}
+
+/**
+ * The place a RAW zone name means, for display: `The Plane of Hate - Solo 4 (Refined)` and the
+ * catalog's `Plane of Hate` both read `The Plane of Hate`. The table's name when the zone is in
+ * it, else the raw name with instance selection and tier stripped.
+ */
+export function zonePlace(raw: string): string {
+  return zoneEntryFor(raw)?.name ?? stripInstance(raw).trim()
 }
 
 /**

@@ -28,6 +28,7 @@ import {
   moteSummary,
   moteVerdict,
   ownedCopies,
+  sourceLabel,
   type FarmCell,
   type FarmTier,
   type MoteSummary,
@@ -59,7 +60,7 @@ function sourcesText(c: FarmCell): string {
   if (c.sources.length === 0) return 'source unknown'
   const shown = c.sources
     .slice(0, 2)
-    .map((s) => (s.count > 0 ? `${s.label} ×${String(s.count)}` : s.label))
+    .map((s) => (s.count > 0 ? `${sourceLabel(s)} ×${String(s.count)}` : sourceLabel(s)))
   return c.sources.length > 2 ? `${shown.join('; ')} +${String(c.sources.length - 2)}` : shown.join('; ')
 }
 
@@ -202,13 +203,20 @@ function Targets({ cells }: { cells: FarmCell[] }): JSX.Element {
           Nothing to farm for +{target}.
         </Typography>
       ) : (
-        targets.map((t) => (
-          <Typography key={t.label} variant="body2" sx={{ mb: 0.5 }}>
-            <b>{t.label}</b>
-            {t.looted > 0 ? ` · you looted build pieces here ×${String(t.looted)}` : ''}
-            {' · '}
-            {t.items.map((i) => `${i.item} (${planSlotLabel(i.cell)}) ${String(i.copies)}`).join(', ')}
-          </Typography>
+        targets.map((z) => (
+          <Box key={z.zone ?? ''} sx={{ mb: 1 }} data-testid="farm-zone">
+            <Typography variant="overline" color="text.secondary" sx={{ display: 'block', lineHeight: 2 }}>
+              {z.zone ?? 'Zone unknown'}
+            </Typography>
+            {z.targets.map((t) => (
+              <Typography key={t.mob} variant="body2" sx={{ mb: 0.5, pl: 1 }}>
+                <b>{t.mob}</b>
+                {t.looted > 0 ? ` · you looted build pieces here ×${String(t.looted)}` : ''}
+                {' · '}
+                {t.items.map((i) => `${i.item} (${planSlotLabel(i.cell)}) ${String(i.copies)}`).join(', ')}
+              </Typography>
+            ))}
+          </Box>
         ))
       )}
     </Paper>
