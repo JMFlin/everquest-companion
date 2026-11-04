@@ -263,56 +263,114 @@ export function moteVerdict(total: PieceNeed, majorsHeld: number): MoteVerdict {
   return total.majors.lo <= majorsHeld ? 'maybe' : 'short'
 }
 
-/** One mob worth farming at a target tier, and what it gives the build there. */
-export interface FarmTarget {
-  mob: string
-  /** times you looted a build piece from it; 0 when only the item database names it */
-  looted: number
-  items: { item: string; cell: PlanSlotId; copies: number }[]
+/** A quest that rewards a build piece: the turn-in items one copy takes, and where each drops. */
+export interface QuestRecipe {
+  quest: string
+  components: QuestComponent[]
 }
 
-/** One zone's mobs worth farming. */
+export interface QuestComponent {
+  item: string
+  /** how many one turn-in takes */
+  count: number
+  /** how many you hold now */
+  held: number
+  zone: string
+  /** who to kill; empty when nothing names a dropper */
+  mobs: string[]
+}
+
+/** One line under a zone: a piece that drops here, or a quest component for one. */
+export interface FarmRow {
+  item: string
+  /** the build piece a quest component is turned in for; absent when `item` is the piece */
+  forPiece?: string
+  /** quest components still to gather; absent when `item` is the piece */
+  count?: number
+  /** looted-from first */
+  mobs: string[]
+}
+
 export interface FarmZone {
   zone: string
+  /** times you looted a build piece here */
   looted: number
-  targets: FarmTarget[]
+  rows: FarmRow[]
 }
 
-const copiesOf = (t: FarmTarget): number => t.items.reduce((n, i) => n + i.copies, 0)
+interface RowAcc {
+  row: FarmRow
+  copies: number
+  /** mob -> times you looted the piece from it */
+  mobs: Map<string, number>
+}
 
-function byYield<T extends { looted: number }>(copies: (x: T) => number, name: (x: T) => string) {
-  return (a: T, b: T): number => b.looted - a.looted || copies(b) - copies(a) || name(a).localeCompare(name(b))
+interface ZoneAcc {
+  /** piece -> copies, so a piece several rows lead to counts once */
+  pieces: Map<PlanSlotId, number>
+  rows: Map<string, RowAcc>
+}
+
+const sum = (ns: Iterable<number>): number => [...ns].reduce((n, x) => n + x, 0)
+
+function byYield<T extends { looted: number; copies: number }>(name: (x: T) => string) {
+  return (a: T, b: T): number => b.looted - a.looted || b.copies - a.copies || name(a).localeCompare(name(b))
 }
 
 /**
- * Every source of a piece short of `target`, grouped by zone: zones and mobs you have looted
- * build pieces from first, then by copies they can give.
+ * Where to farm for `target`, grouped by zone: every piece short of it under each zone it drops
+ * in, and, for a piece a quest rewards, each turn-in item still to gather (the copies needed
+ * times the quest's count, less what you hold) under the zone it drops in. Zones and rows you
+ * have looted build pieces from first, then by copies they give; a piece's own rows before
+ * quest components.
  */
-export function farmTargets(cells: readonly FarmCell[], target: FarmTier): FarmZone[] {
-  const zones = new Map<string, Map<string, FarmTarget>>()
+export function farmTargets(
+  cells: readonly FarmCell[],
+  target: FarmTier,
+  recipes: ReadonlyMap<string, QuestRecipe>
+): FarmZone[] {
+  const zones = new Map<string, ZoneAcc>()
+  const rowIn = (zone: string, key: string, piece: { cell: PlanSlotId; copies: number }, row: FarmRow): RowAcc => {
+    const z = zones.get(zone) ?? { pieces: new Map<PlanSlotId, number>(), rows: new Map<string, RowAcc>() }
+    zones.set(zone, z)
+    z.pieces.set(piece.cell, piece.copies)
+    const r = z.rows.get(key) ?? { row, copies: piece.copies, mobs: new Map<string, number>() }
+    z.rows.set(key, r)
+    return r
+  }
   for (const c of cells) {
     const need = c.needs[target]
     if (need === null || need.copies === 0) continue
+    const piece = { cell: c.cell, copies: need.copies }
     for (const s of c.sources) {
-      const mobs = zones.get(s.zone) ?? new Map<string, FarmTarget>()
-      const t = mobs.get(s.mob) ?? { mob: s.mob, looted: 0, items: [] }
-      t.looted += s.count
-      // Two corpus spellings of one zone fold onto the same mob here; list the piece once.
-      if (!t.items.some((i) => i.cell === c.cell)) t.items.push({ item: c.item, cell: c.cell, copies: need.copies })
-      mobs.set(s.mob, t)
-      zones.set(s.zone, mobs)
+      const r = rowIn(s.zone, c.cell, piece, { item: c.item, mobs: [] })
+      r.mobs.set(s.mob, (r.mobs.get(s.mob) ?? 0) + s.count)
+    }
+    for (const q of recipes.get(itemNameKey(c.item))?.components ?? []) {
+      const count = need.copies * q.count - q.held
+      if (count <= 0) continue
+      const r = rowIn(q.zone, `${c.cell}:${q.item}`, piece, { item: q.item, forPiece: c.item, count, mobs: [] })
+      for (const m of q.mobs) r.mobs.set(m, 0)
     }
   }
-  const groups = [...zones].map(([zone, mobs]) => {
-    const targets = [...mobs.values()].sort(byYield(copiesOf, (t) => t.mob))
-    return { zone, looted: targets.reduce((n, t) => n + t.looted, 0), targets }
+  const groups = [...zones].map(([zone, z]) => {
+    const rows = [...z.rows.values()].map((r) => ({
+      ...r,
+      looted: sum(r.mobs.values()),
+      quest: r.row.forPiece === undefined ? 0 : 1
+    }))
+    rows.sort((a, b) => a.quest - b.quest || byYield<(typeof rows)[number]>((r) => r.row.item)(a, b))
+    return {
+      zone,
+      looted: sum(rows.map((r) => r.looted)),
+      copies: sum(z.pieces.values()),
+      rows: rows.map((r) => ({
+        ...r.row,
+        mobs: [...r.mobs].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([m]) => m)
+      }))
+    }
   })
-  // A piece several mobs in the zone drop counts once.
-  const zoneCopies = (g: FarmZone): number => {
-    const pieces = new Map(g.targets.flatMap((t) => t.items.map((i) => [i.cell, i.copies] as const)))
-    return [...pieces.values()].reduce((n, c) => n + c, 0)
-  }
-  return groups.sort(byYield(zoneCopies, (g) => g.zone))
+  return groups.sort(byYield((g) => g.zone)).map(({ zone, looted, rows }) => ({ zone, looted, rows }))
 }
 
 /** The motes this plan uses: Majors held, and the XP of Greater-and-up motes (not counted in it). */

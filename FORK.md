@@ -2,7 +2,7 @@
 
 `JMFlin/everquest-companion` is a long-lived fork of
 [jmoyers/everquest-companion](https://github.com/jmoyers/everquest-companion). It carries the
-**Motes** feature (scan, auto rescan, upgrade planner), the **Builds** tab and overlay (with a Farm view: copies to farm per piece for +7 to +10)
+**Motes** feature (scan, auto rescan, upgrade planner), the **Builds** tab and overlay (with a Farm view: copies to farm per piece for +7 to +10, and where, Plane of Sky turn-in items included)
 ([`docs/plans/builds.md`](docs/plans/builds.md)), two additions to the Sky Cleanup tab (a
 **Can destroy** count that keeps 3 extra turn-ins' worth, and a table of Sky drops no quest
 uses, with class epic pieces kept in and marked on both tables), and the build changes below. These

@@ -30,18 +30,23 @@ import {
   ownedCopies,
   sourceLabel,
   type FarmCell,
-  type FarmTarget,
+  type FarmRow,
   type FarmTier,
   type MoteSummary,
   type MoteVerdict,
   type OwnedCopy,
   type PieceNeed,
+  type QuestRecipe,
   type Range
 } from '@shared/buildFarm'
-import { planSlotLabel, type PlanSlotId } from '@shared/planner/types'
+import { itemNameKey } from '@shared/builds'
+import { planSlotLabel } from '@shared/planner/types'
 import { useCharacterSheet } from '../character/useCharacterSheet'
 import { useProgress } from '../posky/useProgress'
 import { heldMotes } from '../motes/heldMotes'
+import { skyRecipes } from './farmRecipes'
+
+type Recipes = ReadonlyMap<string, QuestRecipe>
 
 function rangeText(r: Range): string {
   return r.lo === r.hi ? String(r.lo) : `${String(r.lo)}-${String(r.hi)}`
@@ -57,8 +62,9 @@ function sparesText(spares: readonly OwnedCopy[]): string {
   return `${String(spares.length)} (${tiers.join(', ')})`
 }
 
-function sourcesText(c: FarmCell): string {
-  if (c.sources.length === 0) return 'source unknown'
+function sourcesText(c: FarmCell, recipes: Recipes): string {
+  const quest = recipes.get(itemNameKey(c.item))?.quest
+  if (c.sources.length === 0) return quest === undefined ? 'source unknown' : `Quest: ${quest}`
   const shown = c.sources
     .slice(0, 2)
     .map((s) => (s.count > 0 ? `${sourceLabel(s)} ×${String(s.count)}` : sourceLabel(s)))
@@ -128,7 +134,7 @@ function NeedCell({ c, tier }: { c: FarmCell; tier: FarmTier }): JSX.Element {
   )
 }
 
-function CellTable({ cells }: { cells: FarmCell[] }): JSX.Element {
+function CellTable({ cells, recipes }: { cells: FarmCell[]; recipes: Recipes }): JSX.Element {
   return (
     <Paper variant="outlined">
       <Table size="small" data-testid="farm-table">
@@ -168,7 +174,7 @@ function CellTable({ cells }: { cells: FarmCell[] }): JSX.Element {
               {FARM_TIERS.map((t) => (
                 <NeedCell key={t} c={c} tier={t} />
               ))}
-              <TableCell sx={{ color: 'text.secondary' }}>{sourcesText(c)}</TableCell>
+              <TableCell sx={{ color: 'text.secondary' }}>{sourcesText(c, recipes)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -177,22 +183,15 @@ function CellTable({ cells }: { cells: FarmCell[] }): JSX.Element {
   )
 }
 
-/** One row per piece in a zone, its mobs in the zone's order (looted-from first). */
-function itemRows(targets: readonly FarmTarget[]): { cell: PlanSlotId; item: string; mobs: string[] }[] {
-  const rows = new Map<PlanSlotId, { cell: PlanSlotId; item: string; mobs: string[] }>()
-  for (const t of targets) {
-    for (const i of t.items) {
-      const r = rows.get(i.cell) ?? { cell: i.cell, item: i.item, mobs: [] }
-      r.mobs.push(t.mob)
-      rows.set(i.cell, r)
-    }
-  }
-  return [...rows.values()]
+function rowText(r: FarmRow): string {
+  const count = r.count === undefined ? '' : ` ×${String(r.count)}`
+  const forPiece = r.forPiece === undefined ? '' : ` for ${r.forPiece}`
+  return `${count}${forPiece}${r.mobs.length === 0 ? '' : ` - ${r.mobs.join(', ')}`}`
 }
 
-function Targets({ cells }: { cells: FarmCell[] }): JSX.Element {
+function Targets({ cells, recipes }: { cells: FarmCell[]; recipes: Recipes }): JSX.Element {
   const [target, setTarget] = useState<FarmTier>(8)
-  const targets = farmTargets(cells, target)
+  const targets = farmTargets(cells, target, recipes)
   return (
     <Paper variant="outlined" sx={{ p: 2 }} data-testid="farm-targets">
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
@@ -222,9 +221,10 @@ function Targets({ cells }: { cells: FarmCell[] }): JSX.Element {
             <Typography variant="overline" color="text.secondary" sx={{ display: 'block', lineHeight: 2 }}>
               {z.zone}
             </Typography>
-            {itemRows(z.targets).map((r) => (
-              <Typography key={r.cell} variant="body2" sx={{ mb: 0.5, pl: 1 }}>
-                <b>{r.item}</b> - {r.mobs.join(', ')}
+            {z.rows.map((r) => (
+              <Typography key={`${r.forPiece ?? ''}:${r.item}`} variant="body2" sx={{ mb: 0.5, pl: 1 }}>
+                <b>{r.item}</b>
+                {rowText(r)}
               </Typography>
             ))}
           </Box>
@@ -236,7 +236,8 @@ function Targets({ cells }: { cells: FarmCell[] }): JSX.Element {
 
 export default function FarmView({ build, payload }: { build: Build; payload: BuildsPayload }): JSX.Element {
   const { sheet } = useCharacterSheet()
-  const { lootHistory, itemOverrides } = useProgress()
+  const { lootHistory, itemOverrides, quests } = useProgress()
+  const recipes = useMemo(() => skyRecipes(quests), [quests])
   const owned = useMemo(() => ownedCopies(sheet?.carry.rows ?? []), [sheet])
   const looted = useMemo(() => lootSources(lootHistory), [lootHistory])
   const motes = useMemo(() => moteSummary(heldMotes(lootHistory, itemOverrides)), [lootHistory, itemOverrides])
@@ -247,11 +248,12 @@ export default function FarmView({ build, payload }: { build: Build; payload: Bu
   return (
     <Stack spacing={2} data-testid="farm-view">
       <Summary cells={cells} motes={motes} />
-      <CellTable cells={cells} />
-      <Targets cells={cells} />
+      <CellTable cells={cells} recipes={recipes} />
+      <Targets cells={cells} recipes={recipes} />
       <Typography variant="caption" color="text.secondary">
         Main pieces only; exaltation donors are not planned here. Inventory: the newest dump. Sources: your
-        loot log, then the item database.
+        loot log, then the item database; Plane of Sky
+        quest rewards list the turn-in items still to gather.
       </Typography>
     </Stack>
   )
