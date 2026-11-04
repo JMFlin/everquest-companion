@@ -84,8 +84,22 @@ export interface WornDump {
 
 /** Where an item comes from, per the committed corpus. `null` in the payload = the corpus has no row. */
 export interface ItemSource {
-  drops: { mob: string; zone?: string }[]
+  drops: { mob: string; zone: string }[]
   quests: string[]
+}
+
+/**
+ * The corpus's drop rows with every zone stated. A row the corpus gives no zone takes the
+ * mob's zones from the wiki mob catalog (`zonesOf`); a mob the catalog can't place is dropped
+ * rather than listed somewhere unknown.
+ */
+export function placedDrops(
+  drops: readonly { mob: string; zone?: string }[],
+  zonesOf: (mob: string) => readonly string[]
+): ItemSource['drops'] {
+  return drops.flatMap((d) =>
+    d.zone === undefined ? zonesOf(d.mob).map((zone) => ({ mob: d.mob, zone })) : [{ mob: d.mob, zone: d.zone }]
+  )
 }
 
 /** The `builds:get` answer: every readable build, every unreadable file, and what you wear. */
@@ -304,7 +318,7 @@ export function differingCells(rows: readonly CompareRow[]): number {
 export function sourceLines(source: ItemSource | null): string[] {
   if (source === null) return []
   return [
-    ...source.drops.map((d) => (d.zone === undefined ? d.mob : `${d.mob} @ ${d.zone}`)),
+    ...source.drops.map((d) => `${d.mob} @ ${d.zone}`),
     ...source.quests.map((q) => `Quest: ${q}`)
   ]
 }
