@@ -30,6 +30,7 @@ import { itemNameKey } from './builds'
 import { parseItemName, splitLocationPath } from './outputs/inventory'
 import { PLAN_SLOTS, type PlanSlotId } from './planner/types'
 import { MOTES, type MoteName } from './planner/moteXp'
+import { zonePlace } from './zones'
 
 export const FARM_TIERS = [7, 8, 9, 10] as const
 export type FarmTier = (typeof FARM_TIERS)[number]
@@ -104,28 +105,37 @@ export function ownedCopies(rows: readonly DumpRow[]): Map<string, OwnedCopy[]> 
 
 /** One place copies of an item were looted from, and how many times (0 = item database only). */
 export interface LootSource {
-  label: string
+  mob: string
+  /** the place, instance and tier stripped (`zonePlace`); null when nothing names it */
+  zone: string | null
   count: number
 }
 
+export function sourceLabel(s: LootSource): string {
+  return s.zone === null ? s.mob : `${s.mob} (${s.zone})`
+}
+
+const sourceId = (mob: string, zone: string | null): string => `${mob}\u0000${zone ?? ''}`
+
 /** The log's loot rows → per `itemNameKey`, the mobs it was looted from, most first. */
 export function lootSources(loot: readonly LootEvent[]): Map<string, LootSource[]> {
-  const mobs = new Map<string, Map<string, number>>()
+  const mobs = new Map<string, Map<string, LootSource>>()
   for (const e of loot) {
     if (e.source === undefined) continue
     const key = itemNameKey(parseItemName(e.item).base)
-    const label = e.zone === undefined ? e.source : `${e.source} (${e.zone})`
-    const byMob = mobs.get(key) ?? new Map<string, number>()
-    byMob.set(label, (byMob.get(label) ?? 0) + 1)
+    const zone = e.zone === undefined ? null : zonePlace(e.zone)
+    const byMob = mobs.get(key) ?? new Map<string, LootSource>()
+    const id = sourceId(e.source, zone)
+    const s = byMob.get(id) ?? { mob: e.source, zone, count: 0 }
+    s.count += 1
+    byMob.set(id, s)
     mobs.set(key, byMob)
   }
   const out = new Map<string, LootSource[]>()
   for (const [key, byMob] of mobs) {
     out.set(
       key,
-      [...byMob]
-        .map(([label, count]) => ({ label, count }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      [...byMob.values()].sort((a, b) => b.count - a.count || sourceLabel(a).localeCompare(sourceLabel(b)))
     )
   }
   return out
@@ -180,7 +190,8 @@ function needFor(target: FarmTier, tier: number | null, spares: readonly OwnedCo
 
 function corpusSources(source: ItemSource | null | undefined): LootSource[] {
   return (source?.drops ?? []).map((d) => ({
-    label: d.zone === undefined ? d.mob : `${d.mob} (${d.zone})`,
+    mob: d.mob,
+    zone: d.zone === undefined ? null : zonePlace(d.zone),
     count: 0
   }))
 }
@@ -253,31 +264,56 @@ export function moteVerdict(total: PieceNeed, majorsHeld: number): MoteVerdict {
   return total.majors.lo <= majorsHeld ? 'maybe' : 'short'
 }
 
-/** One mob (or zone line) worth farming at a target tier, and what it gives the build there. */
+/** One mob worth farming at a target tier, and what it gives the build there. */
 export interface FarmTarget {
-  label: string
+  mob: string
   /** times you looted a build piece from it; 0 when only the item database names it */
   looted: number
   items: { item: string; cell: PlanSlotId; copies: number }[]
 }
 
-/** Every source of a piece short of `target`, mobs you have looted from first. */
-export function farmTargets(cells: readonly FarmCell[], target: FarmTier): FarmTarget[] {
-  const byLabel = new Map<string, FarmTarget>()
+/** One zone's mobs worth farming; `zone` null collects the mobs nothing places. */
+export interface FarmZone {
+  zone: string | null
+  looted: number
+  targets: FarmTarget[]
+}
+
+const copiesOf = (t: FarmTarget): number => t.items.reduce((n, i) => n + i.copies, 0)
+
+function byYield<T extends { looted: number }>(copies: (x: T) => number, name: (x: T) => string) {
+  return (a: T, b: T): number => b.looted - a.looted || copies(b) - copies(a) || name(a).localeCompare(name(b))
+}
+
+/**
+ * Every source of a piece short of `target`, grouped by zone: zones and mobs you have looted
+ * build pieces from first, then by copies they can give. Placeless mobs come last.
+ */
+export function farmTargets(cells: readonly FarmCell[], target: FarmTier): FarmZone[] {
+  const zones = new Map<string | null, Map<string, FarmTarget>>()
   for (const c of cells) {
     const need = c.needs[target]
     if (need === null || need.copies === 0) continue
     for (const s of c.sources) {
-      const t = byLabel.get(s.label) ?? { label: s.label, looted: 0, items: [] }
+      const mobs = zones.get(s.zone) ?? new Map<string, FarmTarget>()
+      const t = mobs.get(s.mob) ?? { mob: s.mob, looted: 0, items: [] }
       t.looted += s.count
       t.items.push({ item: c.item, cell: c.cell, copies: need.copies })
-      byLabel.set(s.label, t)
+      mobs.set(s.mob, t)
+      zones.set(s.zone, mobs)
     }
   }
-  const copies = (t: FarmTarget): number => t.items.reduce((n, i) => n + i.copies, 0)
-  return [...byLabel.values()].sort(
-    (a, b) => b.looted - a.looted || copies(b) - copies(a) || a.label.localeCompare(b.label)
-  )
+  const groups = [...zones].map(([zone, mobs]) => {
+    const targets = [...mobs.values()].sort(byYield(copiesOf, (t) => t.mob))
+    return { zone, looted: targets.reduce((n, t) => n + t.looted, 0), targets }
+  })
+  // A piece several mobs in the zone drop counts once.
+  const zoneCopies = (g: FarmZone): number => {
+    const pieces = new Map(g.targets.flatMap((t) => t.items.map((i) => [i.cell, i.copies] as const)))
+    return [...pieces.values()].reduce((n, c) => n + c, 0)
+  }
+  const placed = groups.filter((g) => g.zone !== null).sort(byYield(zoneCopies, (g) => g.zone ?? ''))
+  return [...placed, ...groups.filter((g) => g.zone === null)]
 }
 
 /** The motes this plan uses: Majors held, and the XP of Greater-and-up motes (not counted in it). */

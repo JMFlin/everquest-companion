@@ -29,6 +29,7 @@ import {
   catalogZonesFor,
   zoneEntryFor,
   zoneKey,
+  zonePlace,
   zoneShortName,
   zoneShortNameFromCatalog
 } from '../src/shared/zones'
@@ -390,4 +391,16 @@ test('no mobCatalogName can hijack another zone’s own name — the two indexes
       )
     }
   }
+})
+
+test('zonePlace: the place a raw name means, instance and tier stripped', () => {
+  assert.deepEqual(
+    [
+      'The Plane of Hate - Solo 4 (Refined)',
+      'Plane of Hate',
+      'Najena 4 (Refined)',
+      'Somewhere Unmapped - Group 2 (Fused)'
+    ].map(zonePlace),
+    ['The Plane of Hate', 'The Plane of Hate', 'Najena', 'Somewhere Unmapped']
+  )
 })
