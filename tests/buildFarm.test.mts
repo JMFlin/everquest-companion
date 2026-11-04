@@ -85,12 +85,8 @@ test('a piece below +5 takes Majors itself; a missing piece is one more copy', (
   const total = farmTotals(cells)[7]
   assert.deepEqual(total, { copies: 6, majors: { lo: 32, hi: 50 } })
   assert.deepEqual([moteVerdict(total, 60), moteVerdict(total, 40), moteVerdict(total, 10)], ['enough', 'maybe', 'short'])
-  assert.deepEqual(farmTargets(cells, 7), [
-    {
-      zone: 'The Plane of Sky',
-      looted: 0,
-      targets: [{ mob: 'Noble Dojorn', looted: 0, items: [{ item: 'Golden Efreeti Turban', cell: 'HEAD', copies: 4 }] }]
-    }
+  assert.deepEqual(farmTargets(cells, 7, new Map()), [
+    { zone: 'The Plane of Sky', looted: 0, rows: [{ item: 'Golden Efreeti Turban', mobs: ['Noble Dojorn'] }] }
   ])
 })
 
@@ -113,14 +109,45 @@ test('farm targets: grouped by zone, looted zones first, one zone spelled two wa
       }
     }
   )
-  assert.deepEqual(
-    farmTargets(cells, 7).map((z) => [z.zone, z.looted, z.targets.map((t) => t.mob)]),
+  assert.deepEqual(farmTargets(cells, 7, new Map()), [
+    {
+      zone: 'The Plane of Hate',
+      looted: 1,
+      rows: [
+        { item: 'Checkmate', mobs: ['a hate guard'] },
+        { item: 'Turban', mobs: ['a hate lord'] }
+      ]
+    },
+    { zone: 'The Plane of Sky', looted: 0, rows: [{ item: 'Turban', mobs: ['Noble Dojorn'] }] }
+  ])
+})
+
+test('farm targets: a quest reward lists its turn-in items still to gather, less what you hold', () => {
+  const cells = farmCells(build({ SHOULDERS: { name: "Ton Po's Shoulder Wraps" } }), new Map(), new Map(), {})
+  const recipes = new Map([
     [
-      ['The Plane of Hate', 1, ['a hate guard', 'a hate lord']],
-      ['The Plane of Sky', 0, ['Noble Dojorn']]
+      "ton po's shoulder wraps",
+      {
+        quest: 'Monk Test of Tears',
+        components: [
+          { item: 'Silken Wrap', count: 1, held: 1, zone: 'The Plane of Sky', mobs: ['Bazzt Zzzt (Island 6)'] },
+          { item: 'Wind Rune Beza', count: 1, held: 0, zone: 'The Plane of Sky', mobs: ['any Plane of Sky mob'] },
+          { item: 'Spare Feather', count: 1, held: 9, zone: 'The Plane of Sky', mobs: [] }
+        ]
+      }
     ]
-  )
-  assert.deepEqual(farmTargets(cells, 7)[0].targets[1].items.map((i) => i.cell), ['HEAD'])
+  ])
+  // Missing piece to +7: 4 copies, so 4 turn-ins.
+  assert.deepEqual(farmTargets(cells, 7, recipes), [
+    {
+      zone: 'The Plane of Sky',
+      looted: 0,
+      rows: [
+        { item: 'Silken Wrap', forPiece: "Ton Po's Shoulder Wraps", count: 3, mobs: ['Bazzt Zzzt (Island 6)'] },
+        { item: 'Wind Rune Beza', forPiece: "Ton Po's Shoulder Wraps", count: 4, mobs: ['any Plane of Sky mob'] }
+      ]
+    }
+  ])
 })
 
 test('motes: Majors held, and what Greater-and-up add outside the plan', () => {

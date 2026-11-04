@@ -10,15 +10,15 @@ Builds overlay shows only the cells that still differ.
 | Module | Owns |
 |---|---|
 | [`src/shared/builds.ts`](../../src/shared/builds.ts) | The build file format and its one validator (`parseBuildFile`), the worn cells read off a dump (`wornCells`), the comparison (`compareBuild`), source lines. Pure, node-tested. |
-| [`src/shared/buildFarm.ts`](../../src/shared/buildFarm.ts) | The Farm view's model: copies to farm and Major motes needed per piece for +7 to +10, from the dump's copies, the loot log's sources and the held motes. Pure, node-tested. |
+| [`src/shared/buildFarm.ts`](../../src/shared/buildFarm.ts) | The Farm view's model: copies to farm and Major motes needed per piece for +7 to +10, from the dump's copies, the loot log's sources and the held motes; and where to farm, by zone, with quest rewards' turn-in items. Pure, node-tested. |
 | [`src/main/ipc/builds.ts`](../../src/main/ipc/builds.ts) | `builds:get`: reads `<userData>/builds/*.json`, validates each file, resolves every named item's source from the committed corpus, adds the active character's worn cells. |
 | [`src/main/wornLoadouts.ts`](../../src/main/wornLoadouts.ts) | Files each dump under the class loadout a `/who` row beside it names (`<userData>/worn-loadouts/<Name>_<server>/<CLS-CLS-CLS>.json`), and reads those copies back. |
-| [`src/renderer/src/features/builds/`](../../src/renderer/src/features/builds/) | `useBuilds` (payload + selection, shared with the overlay) and the tab. |
+| [`src/renderer/src/features/builds/`](../../src/renderer/src/features/builds/) | `useBuilds` (payload + selection, shared with the overlay), the tab, and `farmRecipes` (Plane of Sky quests as Farm recipes, from the tracker's progress). |
 | [`src/renderer/src/overlay/BuildsOverlay.tsx`](../../src/renderer/src/overlay/BuildsOverlay.tsx) | The overlay: differing cells only. |
 | [`scripts/import-build.mts`](../../scripts/import-build.mts) over [`scripts/builds/loadoutLegends.ts`](../../scripts/builds/loadoutLegends.ts) | Imports a loadoutlegends.com character page as a build file. |
 
 Data flow: build files + dump (+ saved loadout copies) → `builds:get` → `useBuilds` → `compareBuild` → tab / overlay.
-The tab's Farm view also reads the character sheet (all dump rows), the loot log and the held motes → `farmCells`.
+The tab's Farm view also reads the character sheet (all dump rows), the loot log and the held motes → `farmCells`, and the Plane of Sky quest progress → `skyRecipes` → `farmTargets`.
 
 ## Decisions
 
@@ -61,6 +61,10 @@ The tab's Farm view also reads the character sheet (all dump rows), the loot log
   range with the Majors held: enough (farm copies), maybe, or short (farm copies and motes). The
   piece is the best copy worn or on the Equipment key ring; bag, bank and hoard copies are spares,
   used first. Greater-and-up motes are shown, not subtracted. Exaltation donors are not planned.
+- **Farm: where, by zone.** One row per piece under each zone it drops in; zone names fold
+  instance and tier (`zonePlace`), and a drop with no zone takes the wiki mob catalog's, or is
+  left out. A Plane of Sky reward lists each turn-in item still to gather (copies × count, less
+  held) with its droppers and island, under The Plane of Sky.
 - **No cache, no file watcher.** The tab and overlay re-read on open, on Reload, on a dump
   re-read and (overlay) on a character switch.
 
