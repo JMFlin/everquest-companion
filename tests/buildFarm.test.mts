@@ -40,15 +40,14 @@ test('the dump: worn and Equipment key-ring copies are pieces, containers and ho
   assert.deepEqual(owned.get('cloak of scales'), [{ tier: 3, place: 'Equipment', stored: true }])
 })
 
-test('the log: who dropped each item, most first', () => {
+test('the log: who dropped each item, most first; a row the log could not place is left out', () => {
   const sources = lootSources([
     { ts: 1, item: 'Checkmate +4', source: 'The Game Master', zone: 'The Plane of Hate - Solo 4 (Refined)' },
     { ts: 2, item: 'Checkmate', source: 'The Game Master', zone: 'The Plane of Hate' },
     { ts: 3, item: 'Checkmate +2', source: 'a guard' }
   ])
   assert.deepEqual(sources.get('checkmate'), [
-    { mob: 'The Game Master', zone: 'The Plane of Hate', count: 2 },
-    { mob: 'a guard', zone: null, count: 1 }
+    { mob: 'The Game Master', zone: 'The Plane of Hate', count: 2 }
   ])
 })
 
@@ -95,7 +94,7 @@ test('a piece below +5 takes Majors itself; a missing piece is one more copy', (
   ])
 })
 
-test('farm targets: grouped by zone, looted zones first, placeless mobs last', () => {
+test('farm targets: grouped by zone, looted zones first, one zone spelled two ways is one place', () => {
   const cells = farmCells(
     build({ HEAD: { name: 'Turban' }, EAR: { name: 'Checkmate' } }),
     new Map(),
@@ -107,7 +106,8 @@ test('farm targets: grouped by zone, looted zones first, placeless mobs last', (
       turban: {
         drops: [
           { mob: 'Noble Dojorn', zone: 'Plane of Sky' },
-          { mob: 'a hate lord', zone: 'Plane of Hate' }
+          { mob: 'a hate lord', zone: 'Plane of Hate' },
+          { mob: 'a hate lord', zone: 'The Plane of Hate' }
         ],
         quests: []
       }
@@ -117,10 +117,10 @@ test('farm targets: grouped by zone, looted zones first, placeless mobs last', (
     farmTargets(cells, 7).map((z) => [z.zone, z.looted, z.targets.map((t) => t.mob)]),
     [
       ['The Plane of Hate', 1, ['a hate guard', 'a hate lord']],
-      ['The Plane of Sky', 0, ['Noble Dojorn']],
-      [null, 1, ['a stray']]
+      ['The Plane of Sky', 0, ['Noble Dojorn']]
     ]
   )
+  assert.deepEqual(farmTargets(cells, 7)[0].targets[1].items.map((i) => i.cell), ['HEAD'])
 })
 
 test('motes: Majors held, and what Greater-and-up add outside the plan', () => {

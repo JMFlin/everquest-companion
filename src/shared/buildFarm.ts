@@ -106,26 +106,25 @@ export function ownedCopies(rows: readonly DumpRow[]): Map<string, OwnedCopy[]> 
 /** One place copies of an item were looted from, and how many times (0 = item database only). */
 export interface LootSource {
   mob: string
-  /** the place, instance and tier stripped (`zonePlace`); null when nothing names it */
-  zone: string | null
+  /** the place, instance and tier stripped (`zonePlace`) */
+  zone: string
   count: number
 }
 
-export function sourceLabel(s: LootSource): string {
-  return s.zone === null ? s.mob : `${s.mob} (${s.zone})`
+export function sourceLabel(s: Pick<LootSource, 'mob' | 'zone'>): string {
+  return `${s.mob} (${s.zone})`
 }
-
-const sourceId = (mob: string, zone: string | null): string => `${mob}\u0000${zone ?? ''}`
 
 /** The log's loot rows → per `itemNameKey`, the mobs it was looted from, most first. */
 export function lootSources(loot: readonly LootEvent[]): Map<string, LootSource[]> {
   const mobs = new Map<string, Map<string, LootSource>>()
   for (const e of loot) {
-    if (e.source === undefined) continue
+    // A row the log could not place is left out; the item database says where it drops.
+    if (e.source === undefined || e.zone === undefined) continue
     const key = itemNameKey(parseItemName(e.item).base)
-    const zone = e.zone === undefined ? null : zonePlace(e.zone)
+    const zone = zonePlace(e.zone)
     const byMob = mobs.get(key) ?? new Map<string, LootSource>()
-    const id = sourceId(e.source, zone)
+    const id = sourceLabel({ mob: e.source, zone })
     const s = byMob.get(id) ?? { mob: e.source, zone, count: 0 }
     s.count += 1
     byMob.set(id, s)
@@ -191,7 +190,7 @@ function needFor(target: FarmTier, tier: number | null, spares: readonly OwnedCo
 function corpusSources(source: ItemSource | null | undefined): LootSource[] {
   return (source?.drops ?? []).map((d) => ({
     mob: d.mob,
-    zone: d.zone === undefined ? null : zonePlace(d.zone),
+    zone: zonePlace(d.zone),
     count: 0
   }))
 }
@@ -272,9 +271,9 @@ export interface FarmTarget {
   items: { item: string; cell: PlanSlotId; copies: number }[]
 }
 
-/** One zone's mobs worth farming; `zone` null collects the mobs nothing places. */
+/** One zone's mobs worth farming. */
 export interface FarmZone {
-  zone: string | null
+  zone: string
   looted: number
   targets: FarmTarget[]
 }
@@ -287,10 +286,10 @@ function byYield<T extends { looted: number }>(copies: (x: T) => number, name: (
 
 /**
  * Every source of a piece short of `target`, grouped by zone: zones and mobs you have looted
- * build pieces from first, then by copies they can give. Placeless mobs come last.
+ * build pieces from first, then by copies they can give.
  */
 export function farmTargets(cells: readonly FarmCell[], target: FarmTier): FarmZone[] {
-  const zones = new Map<string | null, Map<string, FarmTarget>>()
+  const zones = new Map<string, Map<string, FarmTarget>>()
   for (const c of cells) {
     const need = c.needs[target]
     if (need === null || need.copies === 0) continue
@@ -298,7 +297,8 @@ export function farmTargets(cells: readonly FarmCell[], target: FarmTier): FarmZ
       const mobs = zones.get(s.zone) ?? new Map<string, FarmTarget>()
       const t = mobs.get(s.mob) ?? { mob: s.mob, looted: 0, items: [] }
       t.looted += s.count
-      t.items.push({ item: c.item, cell: c.cell, copies: need.copies })
+      // Two corpus spellings of one zone fold onto the same mob here; list the piece once.
+      if (!t.items.some((i) => i.cell === c.cell)) t.items.push({ item: c.item, cell: c.cell, copies: need.copies })
       mobs.set(s.mob, t)
       zones.set(s.zone, mobs)
     }
@@ -312,8 +312,7 @@ export function farmTargets(cells: readonly FarmCell[], target: FarmTier): FarmZ
     const pieces = new Map(g.targets.flatMap((t) => t.items.map((i) => [i.cell, i.copies] as const)))
     return [...pieces.values()].reduce((n, c) => n + c, 0)
   }
-  const placed = groups.filter((g) => g.zone !== null).sort(byYield(zoneCopies, (g) => g.zone ?? ''))
-  return [...placed, ...groups.filter((g) => g.zone === null)]
+  return groups.sort(byYield(zoneCopies, (g) => g.zone))
 }
 
 /** The motes this plan uses: Majors held, and the XP of Greater-and-up motes (not counted in it). */

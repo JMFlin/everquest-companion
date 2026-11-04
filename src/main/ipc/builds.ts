@@ -17,6 +17,7 @@ import { IPC } from '../../shared/ipc'
 import {
   itemNameKey,
   parseBuildFile,
+  placedDrops,
   wornCells,
   type Build,
   type BuildsPayload,
@@ -31,6 +32,7 @@ import { buildItemDbIndex, itemKey, type ItemDbEntry, type ItemDbFile } from '..
 // The COMMITTED wiki item database — the same module itemLookup.ts imports, so the JSON is
 // inlined into the main bundle exactly once.
 import itemsJson from '../data/items.json'
+import { localMobEntry } from '../mobLookupLocal'
 
 let index: Map<string, ItemDbEntry> | null = null
 
@@ -44,7 +46,7 @@ function sourceOf(name: string): ItemSource | null {
   const record = itemIndex().get(itemKey(name))
   if (record === undefined) return null
   return {
-    drops: (record.dropsFrom ?? []).map((d) => (d.zone === undefined ? { mob: d.mob } : { mob: d.mob, zone: d.zone })),
+    drops: placedDrops(record.dropsFrom ?? [], (mob) => localMobEntry(mob)?.zones ?? []),
     quests: (record.questUses ?? []).map((q) => q.quest)
   }
 }

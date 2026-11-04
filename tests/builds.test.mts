@@ -13,6 +13,7 @@ import {
   compareBuild,
   compareKey,
   parseBuildFile,
+  placedDrops,
   sourceLines,
   wornCells,
   wornFor,
@@ -161,12 +162,28 @@ test('compare: a paired slot matches across its two cells; which ring is FINGER2
 test('source lines: drops then quests; an unknown item has none', () => {
   assert.deepEqual(
     sourceLines({
-      drops: [{ mob: 'Innoruuk', zone: 'Plane of Hate' }, { mob: 'Fright' }],
+      drops: [{ mob: 'Innoruuk', zone: 'Plane of Hate' }],
       quests: ['Wizard Test of Focus']
     }),
-    ['Innoruuk @ Plane of Hate', 'Fright', 'Quest: Wizard Test of Focus']
+    ['Innoruuk @ Plane of Hate', 'Quest: Wizard Test of Focus']
   )
   assert.deepEqual(sourceLines(null), [])
+})
+
+test('placed drops: a zoneless row takes the catalog zones, an unplaceable mob is left out', () => {
+  const catalog: Record<string, string[]> = { Fright: ['The Plane of Fear'], Dread: ['Plane of Fear', 'Kedge Keep'] }
+  assert.deepEqual(
+    placedDrops(
+      [{ mob: 'Innoruuk', zone: 'Plane of Hate' }, { mob: 'Fright' }, { mob: 'Dread' }, { mob: 'Nobody Knows' }],
+      (mob) => catalog[mob] ?? []
+    ),
+    [
+      { mob: 'Innoruuk', zone: 'Plane of Hate' },
+      { mob: 'Fright', zone: 'The Plane of Fear' },
+      { mob: 'Dread', zone: 'Plane of Fear' },
+      { mob: 'Dread', zone: 'Kedge Keep' }
+    ]
+  )
 })
 
 test('build file: classes validated as 1-3 distinct /who codes', () => {

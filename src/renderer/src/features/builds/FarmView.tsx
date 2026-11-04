@@ -30,6 +30,7 @@ import {
   ownedCopies,
   sourceLabel,
   type FarmCell,
+  type FarmTarget,
   type FarmTier,
   type MoteSummary,
   type MoteVerdict,
@@ -37,7 +38,7 @@ import {
   type PieceNeed,
   type Range
 } from '@shared/buildFarm'
-import { planSlotLabel } from '@shared/planner/types'
+import { planSlotLabel, type PlanSlotId } from '@shared/planner/types'
 import { useCharacterSheet } from '../character/useCharacterSheet'
 import { useProgress } from '../posky/useProgress'
 import { heldMotes } from '../motes/heldMotes'
@@ -176,6 +177,19 @@ function CellTable({ cells }: { cells: FarmCell[] }): JSX.Element {
   )
 }
 
+/** One row per piece in a zone, its mobs in the zone's order (looted-from first). */
+function itemRows(targets: readonly FarmTarget[]): { cell: PlanSlotId; item: string; mobs: string[] }[] {
+  const rows = new Map<PlanSlotId, { cell: PlanSlotId; item: string; mobs: string[] }>()
+  for (const t of targets) {
+    for (const i of t.items) {
+      const r = rows.get(i.cell) ?? { cell: i.cell, item: i.item, mobs: [] }
+      r.mobs.push(t.mob)
+      rows.set(i.cell, r)
+    }
+  }
+  return [...rows.values()]
+}
+
 function Targets({ cells }: { cells: FarmCell[] }): JSX.Element {
   const [target, setTarget] = useState<FarmTier>(8)
   const targets = farmTargets(cells, target)
@@ -204,13 +218,13 @@ function Targets({ cells }: { cells: FarmCell[] }): JSX.Element {
         </Typography>
       ) : (
         targets.map((z) => (
-          <Box key={z.zone ?? ''} sx={{ mb: 1 }} data-testid="farm-zone">
+          <Box key={z.zone} sx={{ mb: 1 }} data-testid="farm-zone">
             <Typography variant="overline" color="text.secondary" sx={{ display: 'block', lineHeight: 2 }}>
-              {z.zone ?? 'Zone unknown'}
+              {z.zone}
             </Typography>
-            {z.targets.map((t) => (
-              <Typography key={t.mob} variant="body2" sx={{ mb: 0.5, pl: 1 }}>
-                <b>{t.items.map((i) => i.item).join(', ')}</b> - {t.mob}
+            {itemRows(z.targets).map((r) => (
+              <Typography key={r.cell} variant="body2" sx={{ mb: 0.5, pl: 1 }}>
+                <b>{r.item}</b> - {r.mobs.join(', ')}
               </Typography>
             ))}
           </Box>
