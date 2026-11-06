@@ -22,10 +22,14 @@
 // WHICH COPY IS THE PIECE: the best copy worn or kept on the Equipment key ring (where Legends
 // stores gear for loadouts; the dump lists it as key-ring category `Equipment`). Bags, bank, shared
 // bank, depot and hoard copies are spares, and so are stored copies no cell of this build uses.
-// Exaltation donors are not planned here.
+//
+// EXALTATION DONORS ARE ONE COPY EACH: a donor is socketed, never merged, so it has no tier to
+// farm towards and stays out of the copy and mote totals. A donor is socketed when the build
+// comparison says that socket already holds it, held when a loose copy is in the dump, and
+// otherwise one copy to farm, listed under every target.
 
 import type { LootEvent } from './types'
-import type { Build, ItemSource } from './builds'
+import type { Build, CompareRow, ExaltKind, ItemSource } from './builds'
 import { itemNameKey } from './builds'
 import { parseItemName, splitLocationPath } from './outputs/inventory'
 import { PLAN_SLOTS, type PlanSlotId } from './planner/types'
@@ -241,6 +245,45 @@ export function farmCells(
   return cells
 }
 
+/** One exaltation the build names: socketed, held loose, or one copy to farm. */
+export interface FarmExalt {
+  cell: PlanSlotId
+  kind: ExaltKind
+  donor: string
+  /** the build piece it is socketed into */
+  piece: string
+  status: 'socketed' | 'held' | 'missing'
+  /** where the loose copy is, when `held` */
+  place: string | null
+  /** looted-from first (with counts), then the item database's droppers */
+  sources: readonly LootSource[]
+}
+
+/** Every donor the build names, in slot and socket order, against the compared body and the dump. */
+export function farmExalts(
+  rows: readonly CompareRow[],
+  owned: ReadonlyMap<string, readonly OwnedCopy[]>,
+  looted: ReadonlyMap<string, readonly LootSource[]>,
+  sources: Readonly<Record<string, ItemSource | null>>
+): FarmExalt[] {
+  return rows.flatMap((r) =>
+    r.exaltations.map((e) => {
+      const key = itemNameKey(e.build)
+      const loose = owned.get(key)?.[0]
+      const fromLog = looted.get(key)
+      return {
+        cell: r.cell,
+        kind: e.kind,
+        donor: e.build,
+        piece: r.build.name,
+        status: !e.differs ? 'socketed' : loose === undefined ? 'missing' : 'held',
+        place: e.differs && loose !== undefined ? loose.place : null,
+        sources: fromLog !== undefined && fromLog.length > 0 ? fromLog : corpusSources(sources[key])
+      }
+    })
+  )
+}
+
 /** Copies and Majors over every cell not yet at the target. */
 export function farmTotals(cells: readonly FarmCell[]): Record<FarmTier, PieceNeed> {
   const out = {} as Record<FarmTier, PieceNeed>
@@ -285,6 +328,8 @@ export interface FarmRow {
   item: string
   /** the build piece a quest component is turned in for; absent when `item` is the piece */
   forPiece?: string
+  /** the build piece a missing exaltation donor is socketed into */
+  exaltFor?: string
   /** copies of the piece still to farm, or of a quest component still to gather */
   count: number
   /** looted-from first */
@@ -306,8 +351,8 @@ interface RowAcc {
 }
 
 interface ZoneAcc {
-  /** piece -> copies, so a piece several rows lead to counts once */
-  pieces: Map<PlanSlotId, number>
+  /** piece (cell, or cell:kind for a donor) -> copies, so a piece several rows lead to counts once */
+  pieces: Map<string, number>
   rows: Map<string, RowAcc>
 }
 
@@ -317,47 +362,103 @@ function byYield<T extends { looted: number; copies: number }>(name: (x: T) => s
   return (a: T, b: T): number => b.looted - a.looted || b.copies - a.copies || name(a).localeCompare(name(b))
 }
 
+/** One thing to farm for a target: a piece short of it, or a missing donor (one copy). */
+interface Wanted {
+  /** the cell, or `cell:kind` for a donor; a zone counts its copies once */
+  id: string
+  item: string
+  copies: number
+  exaltFor?: string
+  sources: readonly LootSource[]
+}
+
+function wantedFor(cells: readonly FarmCell[], target: FarmTier, exalts: readonly FarmExalt[]): Wanted[] {
+  const out: Wanted[] = []
+  for (const c of cells) {
+    const copies = c.needs[target]?.copies ?? 0
+    if (copies > 0) out.push({ id: c.cell, item: c.item, copies, sources: c.sources })
+  }
+  for (const e of exalts) {
+    if (e.status !== 'missing') continue
+    out.push({
+      id: `${e.cell}:${e.kind}`,
+      item: e.donor,
+      copies: 1,
+      exaltFor: e.piece,
+      sources: e.sources
+    })
+  }
+  return out
+}
+
+/** The row `key` under `zone`, opened with `row` the first time. */
+function rowIn(
+  zones: Map<string, ZoneAcc>,
+  { zone, key }: { zone: string; key: string },
+  w: Wanted,
+  row: FarmRow
+): RowAcc {
+  const z = zones.get(zone) ?? {
+    pieces: new Map<string, number>(),
+    rows: new Map<string, RowAcc>()
+  }
+  zones.set(zone, z)
+  z.pieces.set(w.id, w.copies)
+  const r = z.rows.get(key) ?? {
+    row,
+    copies: w.copies,
+    mobs: new Map<string, number>()
+  }
+  z.rows.set(key, r)
+  return r
+}
+
+function addWanted(zones: Map<string, ZoneAcc>, w: Wanted, recipes: ReadonlyMap<string, QuestRecipe>): void {
+  for (const s of w.sources) {
+    const row: FarmRow = { item: w.item, count: w.copies, mobs: [] }
+    if (w.exaltFor !== undefined) row.exaltFor = w.exaltFor
+    const r = rowIn(zones, { zone: s.zone, key: w.id }, w, row)
+    r.mobs.set(s.mob, (r.mobs.get(s.mob) ?? 0) + s.count)
+  }
+  for (const q of recipes.get(itemNameKey(w.item))?.components ?? []) {
+    const count = w.copies * q.count - q.held
+    if (count <= 0) continue
+    const r = rowIn(zones, { zone: q.zone, key: `${w.id}:${q.item}` }, w, {
+      item: q.item,
+      forPiece: w.item,
+      count,
+      mobs: []
+    })
+    for (const m of q.mobs) r.mobs.set(m, 0)
+  }
+}
+
+/** A piece's own rows, then donors, then quest components. */
+function rowRank(row: FarmRow): number {
+  if (row.forPiece !== undefined) return 2
+  return row.exaltFor !== undefined ? 1 : 0
+}
+
 /**
  * Where to farm for `target`, grouped by zone: every piece short of it under each zone it drops
  * in, and, for a piece a quest rewards, each turn-in item still to gather (the copies needed
- * times the quest's count, less what you hold) under the zone it drops in. Zones and rows you
- * have looted build pieces from first, then by copies they give; a piece's own rows before
- * quest components.
+ * times the quest's count, less what you hold) under the zone it drops in. A missing exaltation
+ * donor is one copy, the same at every target. Zones and rows you have looted build pieces from
+ * first, then by copies they give; pieces before donors before quest components.
  */
 export function farmTargets(
   cells: readonly FarmCell[],
   target: FarmTier,
-  recipes: ReadonlyMap<string, QuestRecipe>
+  recipes: ReadonlyMap<string, QuestRecipe>,
+  exalts: readonly FarmExalt[]
 ): FarmZone[] {
   const zones = new Map<string, ZoneAcc>()
-  const rowIn = (zone: string, key: string, piece: { cell: PlanSlotId; copies: number }, row: FarmRow): RowAcc => {
-    const z = zones.get(zone) ?? { pieces: new Map<PlanSlotId, number>(), rows: new Map<string, RowAcc>() }
-    zones.set(zone, z)
-    z.pieces.set(piece.cell, piece.copies)
-    const r = z.rows.get(key) ?? { row, copies: piece.copies, mobs: new Map<string, number>() }
-    z.rows.set(key, r)
-    return r
-  }
-  for (const c of cells) {
-    const need = c.needs[target]
-    if (need === null || need.copies === 0) continue
-    const piece = { cell: c.cell, copies: need.copies }
-    for (const s of c.sources) {
-      const r = rowIn(s.zone, c.cell, piece, { item: c.item, count: need.copies, mobs: [] })
-      r.mobs.set(s.mob, (r.mobs.get(s.mob) ?? 0) + s.count)
-    }
-    for (const q of recipes.get(itemNameKey(c.item))?.components ?? []) {
-      const count = need.copies * q.count - q.held
-      if (count <= 0) continue
-      const r = rowIn(q.zone, `${c.cell}:${q.item}`, piece, { item: q.item, forPiece: c.item, count, mobs: [] })
-      for (const m of q.mobs) r.mobs.set(m, 0)
-    }
-  }
+  for (const w of wantedFor(cells, target, exalts)) addWanted(zones, w, recipes)
   const groups = [...zones].map(([zone, z]) => {
     const rows = [...z.rows.values()].map((r) => ({
       ...r,
       looted: sum(r.mobs.values()),
-      quest: r.row.forPiece === undefined ? 0 : 1
+      quest: rowRank(r.row)
     }))
     rows.sort((a, b) => a.quest - b.quest || byYield<(typeof rows)[number]>((r) => r.row.item)(a, b))
     return {

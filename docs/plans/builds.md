@@ -60,7 +60,11 @@ The tab's Farm view also reads the character sheet (all dump rows), the loot log
   and the Majors are 4 per copy that drops at +4 up to 7 per copy at +0. The summary compares that
   range with the Majors held: enough (farm copies), maybe, or short (farm copies and motes). The
   piece is the best copy worn or on the Equipment key ring; bag, bank and hoard copies are spares,
-  used first. Greater-and-up motes are shown, not subtracted. Exaltation donors are not planned.
+  used first. Greater-and-up motes are shown, not subtracted.
+- **Farm: exaltations, one copy each.** A donor is socketed, never merged, so it has no tier and
+  stays out of the copy and mote totals. Each donor the build names reads socketed (the compared
+  loadout's socket holds it), held (a loose copy is in the dump), or missing; a missing one is one
+  copy under every target in the zone list, and a Sky quest donor lists its turn-in items.
 - **Farm: where, by zone.** One row per piece (copies to farm) under each zone it drops in; zone names fold
   instance and tier (`zonePlace`), and a drop with no zone takes the wiki mob catalog's, or is
   left out. A Plane of Sky reward lists each turn-in item still to gather (copies × count, less

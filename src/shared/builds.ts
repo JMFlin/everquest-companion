@@ -109,7 +109,7 @@ export interface BuildsPayload {
   builds: Build[]
   /** a file that failed validation, with why — shown, never silently dropped */
   errors: { file: string; message: string }[]
-  /** keyed by `itemKey(name)` (lowercased base name), for every item any build names */
+  /** keyed by `itemKey(name)` (lowercased base name), for every item and exaltation donor any build names */
   sources: Record<string, ItemSource | null>
   /** the active character's newest dump, or null when the command has never been run */
   worn: WornDump | null

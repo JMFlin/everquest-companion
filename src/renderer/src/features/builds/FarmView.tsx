@@ -1,6 +1,6 @@
 // FarmView: the Builds tab's Farm view. For the selected build, how many more copies of each piece
 // to farm to reach +7, +8, +9 and +10, how many Major motes that takes against the ones you hold,
-// and where the pieces drop. Every number comes from @shared/buildFarm; this file reads the three
+// where the pieces drop, and the exaltation donors still to find. Every number comes from @shared/buildFarm; this file reads the three
 // inputs (the character's inventory dump, the loot log, the held motes) and draws the result.
 
 import { type JSX, useMemo, useState } from 'react'
@@ -17,11 +17,12 @@ import {
   ToggleButtonGroup,
   Typography
 } from '@mui/material'
-import type { Build, BuildsPayload } from '@shared/builds'
+import type { Build, BuildsPayload, CompareRow } from '@shared/builds'
 import {
   BOOST_TIER,
   FARM_TIERS,
   farmCells,
+  farmExalts,
   farmTargets,
   farmTotals,
   lootSources,
@@ -30,8 +31,10 @@ import {
   ownedCopies,
   sourceLabel,
   type FarmCell,
+  type FarmExalt,
   type FarmRow,
   type FarmTier,
+  type LootSource,
   type MoteSummary,
   type MoteVerdict,
   type OwnedCopy,
@@ -62,13 +65,12 @@ function sparesText(spares: readonly OwnedCopy[]): string {
   return `${String(spares.length)} (${tiers.join(', ')})`
 }
 
-function sourcesText(c: FarmCell, recipes: Recipes): string {
-  const quest = recipes.get(itemNameKey(c.item))?.quest
-  if (c.sources.length === 0) return quest === undefined ? 'source unknown' : `Quest: ${quest}`
-  const shown = c.sources
-    .slice(0, 2)
-    .map((s) => (s.count > 0 ? `${sourceLabel(s)} ×${String(s.count)}` : sourceLabel(s)))
-  return c.sources.length > 2 ? `${shown.join('; ')} +${String(c.sources.length - 2)}` : shown.join('; ')
+/** The first two places an item drops (`item`'s Sky quest when none), for a piece or a donor. */
+function sourcesText({ item, sources }: { item: string; sources: readonly LootSource[] }, recipes: Recipes): string {
+  const quest = recipes.get(itemNameKey(item))?.quest
+  if (sources.length === 0) return quest === undefined ? 'source unknown' : `Quest: ${quest}`
+  const shown = sources.slice(0, 2).map((s) => (s.count > 0 ? `${sourceLabel(s)} ×${String(s.count)}` : sourceLabel(s)))
+  return sources.length > 2 ? `${shown.join('; ')} +${String(sources.length - 2)}` : shown.join('; ')
 }
 
 const VERDICT_TEXT: Record<MoteVerdict, string> = {
@@ -183,15 +185,72 @@ function CellTable({ cells, recipes }: { cells: FarmCell[]; recipes: Recipes }):
   )
 }
 
+const EXALT_STATUS: Record<FarmExalt['status'], { text: string; color: string }> = {
+  socketed: { text: 'socketed', color: 'success.main' },
+  held: { text: 'held', color: 'text.primary' },
+  missing: { text: 'missing', color: 'warning.main' }
+}
+
+function ExaltTable({ exalts, recipes }: { exalts: FarmExalt[]; recipes: Recipes }): JSX.Element {
+  return (
+    <Paper variant="outlined">
+      <Table size="small" data-testid="farm-exalts">
+        <TableHead>
+          <TableRow>
+            <TableCell>Slot</TableCell>
+            <TableCell>Socket</TableCell>
+            <TableCell>Exaltation</TableCell>
+            <TableCell>Now</TableCell>
+            <TableCell>Farm from</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {exalts.map((e) => (
+            <TableRow key={`${e.cell}:${e.kind}`} data-testid={`farm-exalt-${e.cell}-${e.kind}`}>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{planSlotLabel(e.cell)}</TableCell>
+              <TableCell sx={{ textTransform: 'capitalize' }}>{e.kind}</TableCell>
+              <TableCell>
+                <Typography variant="body2" fontWeight={600}>
+                  {e.donor}
+                </Typography>
+              </TableCell>
+              <TableCell
+                sx={{
+                  whiteSpace: 'nowrap',
+                  color: EXALT_STATUS[e.status].color
+                }}
+              >
+                {e.place === null ? EXALT_STATUS[e.status].text : `${EXALT_STATUS[e.status].text} · ${e.place}`}
+              </TableCell>
+              <TableCell sx={{ color: 'text.secondary' }}>
+                {e.status === 'socketed' ? '' : sourcesText({ item: e.donor, sources: e.sources }, recipes)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Paper>
+  )
+}
+
 function rowText(r: FarmRow): string {
   const count = ` ×${String(r.count)}`
-  const forPiece = r.forPiece === undefined ? '' : ` for ${r.forPiece}`
+  const forPiece =
+    r.forPiece !== undefined ? ` for ${r.forPiece}` : r.exaltFor !== undefined ? ` to exalt ${r.exaltFor}` : ''
   return `${count}${forPiece}${r.mobs.length === 0 ? '' : ` - ${r.mobs.join(', ')}`}`
 }
 
-function Targets({ cells, recipes }: { cells: FarmCell[]; recipes: Recipes }): JSX.Element {
+function Targets({
+  cells,
+  exalts,
+  recipes
+}: {
+  cells: FarmCell[]
+  exalts: FarmExalt[]
+  recipes: Recipes
+}): JSX.Element {
   const [target, setTarget] = useState<FarmTier>(8)
-  const targets = farmTargets(cells, target, recipes)
+  const targets = farmTargets(cells, target, recipes, exalts)
   return (
     <Paper variant="outlined" sx={{ p: 2 }} data-testid="farm-targets">
       <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
@@ -222,7 +281,11 @@ function Targets({ cells, recipes }: { cells: FarmCell[]; recipes: Recipes }): J
               {z.zone}
             </Typography>
             {z.rows.map((r) => (
-              <Typography key={`${r.forPiece ?? ''}:${r.item}`} variant="body2" sx={{ mb: 0.5, pl: 1 }}>
+              <Typography
+                key={`${r.forPiece ?? ''}:${r.exaltFor ?? ''}:${r.item}`}
+                variant="body2"
+                sx={{ mb: 0.5, pl: 1 }}
+              >
                 <b>{r.item}</b>
                 {rowText(r)}
               </Typography>
@@ -234,7 +297,15 @@ function Targets({ cells, recipes }: { cells: FarmCell[]; recipes: Recipes }): J
   )
 }
 
-export default function FarmView({ build, payload }: { build: Build; payload: BuildsPayload }): JSX.Element {
+export default function FarmView({
+  build,
+  payload,
+  rows
+}: {
+  build: Build
+  payload: BuildsPayload
+  rows: CompareRow[]
+}): JSX.Element {
   const { sheet } = useCharacterSheet()
   const { lootHistory, itemOverrides, quests } = useProgress()
   const recipes = useMemo(() => skyRecipes(quests), [quests])
@@ -242,6 +313,7 @@ export default function FarmView({ build, payload }: { build: Build; payload: Bu
   const looted = useMemo(() => lootSources(lootHistory), [lootHistory])
   const motes = useMemo(() => moteSummary(heldMotes(lootHistory, itemOverrides)), [lootHistory, itemOverrides])
   const cells = useMemo(() => farmCells(build, owned, looted, payload.sources), [build, owned, looted, payload])
+  const exalts = useMemo(() => farmExalts(rows, owned, looted, payload.sources), [rows, owned, looted, payload])
   if (sheet === null) {
     return <Typography color="text.secondary">No inventory dump yet: type /outputfile inventory in game.</Typography>
   }
@@ -249,11 +321,11 @@ export default function FarmView({ build, payload }: { build: Build; payload: Bu
     <Stack spacing={2} data-testid="farm-view">
       <Summary cells={cells} motes={motes} />
       <CellTable cells={cells} recipes={recipes} />
-      <Targets cells={cells} recipes={recipes} />
+      {exalts.length > 0 && <ExaltTable exalts={exalts} recipes={recipes} />}
+      <Targets cells={cells} exalts={exalts} recipes={recipes} />
       <Typography variant="caption" color="text.secondary">
-        Main pieces only; exaltation donors are not planned here. Inventory: the newest dump. Sources: your
-        loot log, then the item database; Plane of Sky
-        quest rewards list the turn-in items still to gather.
+        Inventory: the newest dump. Exaltations: one copy each, socketed per the compared loadout. Sources: your loot
+        log, then the item database; Plane of Sky quest rewards list the turn-in items still to gather.
       </Typography>
     </Stack>
   )
