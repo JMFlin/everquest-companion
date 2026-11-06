@@ -97,7 +97,11 @@ export function registerBuildsIpc(): void {
     const { builds, errors } = readBuilds(dir)
     const sources: BuildsPayload['sources'] = {}
     for (const build of builds) {
-      for (const item of Object.values(build.slots)) sources[itemNameKey(item.name)] ??= sourceOf(item.name)
+      for (const item of Object.values(build.slots)) {
+        for (const name of [item.name, ...Object.values(item.exaltations ?? {})]) {
+          sources[itemNameKey(name)] ??= sourceOf(name)
+        }
+      }
     }
     return { dir, builds, errors, sources, ...readWorn(getActiveCharacter()) }
   })

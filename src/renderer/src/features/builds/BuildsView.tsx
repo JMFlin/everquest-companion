@@ -295,7 +295,9 @@ function BuildsView(): JSX.Element {
         <Tab value="farm" label="Farm" data-testid="builds-tab-farm" />
       </Tabs>
       {view === 'compare' && rows !== null && <CompareTable rows={rows} payload={payload} />}
-      {view === 'farm' && selected !== null && <FarmView build={selected} payload={payload} />}
+      {view === 'farm' && selected !== null && rows !== null && (
+        <FarmView build={selected} payload={payload} rows={rows} />
+      )}
       <Typography variant="caption" color="text.secondary">
         {state.worn !== null ? `Comparing with ${dumpLabel(state.worn)} · ` : ''}Build files: {payload.dir}
         {selected?.url !== undefined ? ` · imported from ${selected.url}` : ''}

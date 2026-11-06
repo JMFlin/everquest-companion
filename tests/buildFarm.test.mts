@@ -1,10 +1,11 @@
 // The Builds tab's Farm view: copies and Major motes per piece for +7..+10 (src/shared/buildFarm.ts).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { Build } from '../src/shared/builds'
+import { compareBuild, type Build } from '../src/shared/builds'
 import { MOTES } from '../src/shared/planner/moteXp'
 import {
   farmCells,
+  farmExalts,
   farmTargets,
   farmTotals,
   lootSources,
@@ -85,7 +86,7 @@ test('a piece below +5 takes Majors itself; a missing piece is one more copy', (
   const total = farmTotals(cells)[7]
   assert.deepEqual(total, { copies: 6, majors: { lo: 32, hi: 50 } })
   assert.deepEqual([moteVerdict(total, 60), moteVerdict(total, 40), moteVerdict(total, 10)], ['enough', 'maybe', 'short'])
-  assert.deepEqual(farmTargets(cells, 7, new Map()), [
+  assert.deepEqual(farmTargets(cells, 7, new Map(), []), [
     { zone: 'The Plane of Sky', looted: 0, rows: [{ item: 'Golden Efreeti Turban', count: 4, mobs: ['Noble Dojorn'] }] }
   ])
 })
@@ -109,7 +110,7 @@ test('farm targets: grouped by zone, looted zones first, one zone spelled two wa
       }
     }
   )
-  assert.deepEqual(farmTargets(cells, 7, new Map()), [
+  assert.deepEqual(farmTargets(cells, 7, new Map(), []), [
     {
       zone: 'The Plane of Hate',
       looted: 1,
@@ -138,7 +139,7 @@ test('farm targets: a quest reward lists its turn-in items still to gather, less
     ]
   ])
   // Missing piece to +7: 4 copies, so 4 turn-ins.
-  assert.deepEqual(farmTargets(cells, 7, recipes), [
+  assert.deepEqual(farmTargets(cells, 7, recipes, []), [
     {
       zone: 'The Plane of Sky',
       looted: 0,
@@ -148,6 +149,43 @@ test('farm targets: a quest reward lists its turn-in items still to gather, less
       ]
     }
   ])
+})
+
+test('exaltations: socketed per the compared body, held when a loose copy is in the dump, else one to farm', () => {
+  const b = build({
+    NECK: { name: 'Bloodstar Pendant', exaltations: { focus: 'Black Alloy Medallion' } },
+    FINGER: { name: 'Ring of the Eldest', exaltations: { focus: 'Moonstone Ring', worn: 'Jade Ring' } }
+  })
+  const rows = compareBuild(b, {
+    NECK: { name: 'Bloodstar Pendant', exaltations: { focus: 'Black Alloy Medallion' } },
+    FINGER: { name: 'Ring of the Eldest', exaltations: {} }
+  })
+  const owned = ownedCopies([
+    { name: 'Moonstone Ring +2', location: 'General 3-Slot4', lane: 'bags' },
+    { name: 'Black Alloy Medallion (Exaltation)', location: 'Neck-Slot7', lane: 'worn' }
+  ])
+  const exalts = farmExalts(rows, owned, new Map(), {
+    'jade ring': { drops: [{ mob: 'a jade golem', zone: 'Plane of Fear' }], quests: [] }
+  })
+  assert.deepEqual(
+    exalts.map((e) => [e.cell, e.kind, e.donor, e.status, e.place]),
+    [
+      ['NECK', 'focus', 'Black Alloy Medallion', 'socketed', null],
+      ['FINGER', 'focus', 'Moonstone Ring', 'held', 'General 3'],
+      ['FINGER', 'worn', 'Jade Ring', 'missing', null]
+    ]
+  )
+  // Only the missing donor is farmed: one copy, at any target, beside the pieces.
+  const cells = farmCells(b, new Map(), new Map(), {})
+  for (const t of [7, 10] as const) {
+    assert.deepEqual(farmTargets(cells, t, new Map(), exalts), [
+      {
+        zone: 'The Plane of Fear',
+        looted: 0,
+        rows: [{ item: 'Jade Ring', exaltFor: 'Ring of the Eldest', count: 1, mobs: ['a jade golem'] }]
+      }
+    ])
+  }
 })
 
 test('motes: Majors held, and what Greater-and-up add outside the plan', () => {
