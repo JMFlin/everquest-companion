@@ -648,6 +648,13 @@ export const IPC = {
   // each named item's corpus source, and the active character's worn cells. Returns BuildsPayload.
   buildsGet: 'builds:get',
 
+  // ---- saved EverQuest UI layouts (src/shared/uiLayouts.ts, fork) ----
+  // renderer -> main: list / save / apply / delete. Each returns UiLayoutsResult.
+  uiLayoutsList: 'uiLayouts:list',
+  uiLayoutsSave: 'uiLayouts:save',
+  uiLayoutsApply: 'uiLayouts:apply',
+  uiLayoutsDelete: 'uiLayouts:delete',
+
   // ---- map viewer (docs/plans/map-viewer.md §4.2) ----
   // Main owns `fs` and owns effectiveEqRoot(), so main reads and parses `<eqRoot>\maps` and
   // the renderer receives columnar typed arrays (~690 KB worst case, once per zone change).

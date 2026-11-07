@@ -40,6 +40,7 @@ import { registerSoundsIpc } from './sounds'
 import { registerSpeechIpc } from './speech'
 import { registerTelemetryIpc } from './telemetry'
 import { registerUiScaleIpc } from './uiScale'
+import { registerUiLayoutsIpc } from './uiLayouts'
 // The celebration toast's producer channel. It lives beside the window it feeds (src/main/toast.ts)
 // rather than in this folder, because everything it does is window fan-out + item resolution.
 import { registerToastIpc } from '../toast'
@@ -110,6 +111,7 @@ export function registerIpc(): void {
   registerRespawnIpc()
   registerResistIpc()
   registerUiScaleIpc()
+  registerUiLayoutsIpc()
   registerReleaseNotesIpc()
   // Registered in EVERY build, and a no-op in a packaged one — the refusal lives inside the
   // handler rather than around this call, so it is a decision a test can watch being made.
