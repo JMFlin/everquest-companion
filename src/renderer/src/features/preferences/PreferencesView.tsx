@@ -96,6 +96,7 @@ import { ClassComboSetting } from '../profiles/ClassComboPanel'
 import { UpdateSetting, VersionSetting, useUpdateStatus } from './UpdateSetting'
 import type { UpdateStatus } from '@shared/types'
 import { EqFolderSetting } from './EqFolderSetting'
+import { UiLayoutsSetting } from './UiLayoutsSetting'
 // Combat: whose damage the meters show (JOS-115) + where the pet's sits. Its own file with its own
 // descriptor, same ceiling and same answer as PerfSetting and GraphicsSetting.
 import { combatSection } from './CombatSection'
@@ -314,6 +315,12 @@ function buildSections({ version, status, onSendFeedback, onWhatsNew }: SectionI
           label: 'EverQuest install folder',
           keywords: 'path directory logs eqlog character detect override install location',
           content: <EqFolderSetting />
+        },
+        {
+          id: 'ui-layouts',
+          label: 'UI layouts',
+          keywords: 'window layout screen monitor laptop resolution ui ini profile',
+          content: <UiLayoutsSetting />
         }
       ]
     },

@@ -24,6 +24,7 @@ import type { GearSet } from '../shared/planner/gearSet'
 import type { OwnershipPayload } from '../shared/planner/ownership'
 import type { WishList } from '../shared/planner/wishlist'
 import { buildsBridge } from './builds'
+import { uiLayoutsBridge } from './uiLayouts'
 
 export const plannerApi = {
   // ---- exaltation planner (docs/plans/exaltation-planner.md §4.1, §6) ----
@@ -95,5 +96,7 @@ export const plannerApi = {
   setWishlist: (list: WishList): Promise<void> => ipcRenderer.invoke(IPC.wishlistSet, list),
 
   // ---- gear builds (src/shared/builds.ts) — spread here rather than in index.ts for its line ceiling ----
-  ...buildsBridge
+  ...buildsBridge,
+  // ---- saved EverQuest UI layouts (src/shared/uiLayouts.ts), same reason ----
+  ...uiLayoutsBridge
 }
