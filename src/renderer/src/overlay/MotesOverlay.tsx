@@ -7,12 +7,12 @@ import type { CSSProperties, JSX, ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CurrencyScanResult } from '@shared/currencyScan'
 import type { ItemCountOverride } from '@shared/itemOverrides'
-import { MOTES, SPARE_MAX_TIER, stepGroups, type SectionPlan } from '@shared/planner/motes'
+import { FRAGMENTS, MOTES, SPARE_MAX_TIER, stepGroups, type SectionPlan } from '@shared/planner/motes'
 import type { LootSnap } from '@shared/types'
 import { heldMotes } from '../features/motes/heldMotes'
 import { scanSummary } from '../features/motes/ScanPreview'
 import { useAutoRescan } from '../features/motes/useAutoRescan'
-import { RANKS, groupTitle, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type RankPick } from '../features/motes/usePlanner'
+import { FRAGMENT_NOTE, RANKS, groupTitle, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type RankPick } from '../features/motes/usePlanner'
 import { useOverlayChrome } from './useOverlayChrome'
 import { useOverlayModule } from './useOverlayModule'
 import { OverlayHeader } from './OverlayHeader'
@@ -50,7 +50,7 @@ function useHeldStatements(): ItemCountOverride[] {
 
 function Picker(props: { label: string; pick: RankPick; onPick: (n: number) => void }): JSX.Element {
   return (
-    <div style={{ marginTop: 6 }}>
+    <div style={{ marginTop: 6 }} data-testid={`motes-overlay-pick-${props.label.toLowerCase()}`}>
       <div style={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ width: 36 }}>{props.label}</span>
         {RANKS.map((n) => (
@@ -236,13 +236,14 @@ export default function MotesOverlay(): JSX.Element {
           <MaxMote value={p.maxMote} onChange={p.setMaxMote} />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', columnGap: 12, margin: '6px 0' }}>
-          {MOTES.map((m) => (
+          {MOTES.map((m, i) => (
             <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>{shortMote(m.name)}</span>
-              <span>{held[m.name]}</span>
+              <span>{held[m.name]} motes · <span data-testid={`motes-overlay-fragments-${i}`}>{held[FRAGMENTS[i].name]}</span> fragments</span>
             </div>
           ))}
         </div>
+        <div style={{ color: DIM, marginBottom: 6 }}>{FRAGMENT_NOTE}</div>
         <Picker label="Spell" pick={p.spell} onPick={p.pickSpell} />
         {p.spell.sel && (
           <div style={{ paddingLeft: 38 }}>

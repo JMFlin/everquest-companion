@@ -24,13 +24,13 @@ import {
   Typography
 } from '@mui/material'
 import type { CurrencyScanResult } from '@shared/currencyScan'
-import { MOTES, stepGroups, type SectionPlan } from '@shared/planner/motes'
+import { FRAGMENTS, MOTES, UPGRADE_CURRENCIES, stepGroups, type SectionPlan } from '@shared/planner/motes'
 import { useProgress } from '../posky/useProgress'
 import { ScanPreview } from './ScanPreview'
 import { GearExtras, ProgressField } from './GearExtras'
 import { heldMotes } from './heldMotes'
 import { useAutoRescan } from './useAutoRescan'
-import { RANKS, groupTitle, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type Planner, type RankPick } from './usePlanner'
+import { FRAGMENT_NOTE, RANKS, groupTitle, inPick, outcomeText, pickLabel, shortMote, stepText, usePlanner, type Planner, type RankPick } from './usePlanner'
 
 function RankPicker(props: { label: string; pick: RankPick; onPick: (n: number) => void }): JSX.Element {
   return (
@@ -111,7 +111,7 @@ function PlannerPanel({ p }: { p: Planner }): JSX.Element {
         {p.plan.gear && <PlanSteps plan={p.plan.gear} />}
         {(p.plan.spell ?? p.plan.gear) && (
           <Typography variant="body2" color="text.secondary">
-            Left over: {MOTES.map((m) => `${p.plan.remaining[m.name]} ${shortMote(m.name)}`).join(', ')}
+            Left over: {UPGRADE_CURRENCIES.map((m) => `${p.plan.remaining[m.name]} ${shortMote(m.name)}`).join(', ')}
           </Typography>
         )}
       </Stack>
@@ -187,29 +187,30 @@ export default function MotesView(): JSX.Element {
           <TextField
             select
             size="small"
-            label="Use motes up to"
+            label="Use grades up to"
             value={p.maxMote}
             onChange={(e) => p.setMaxMote(Number(e.target.value))}
             sx={{ minWidth: 180 }}
             data-testid="motes-max-mote"
           >
             {MOTES.map((m, i) => (
-              <MenuItem key={m.name} value={i}>
-                {shortMote(m.name)}
-              </MenuItem>
+              <MenuItem key={m.name} value={i}>{shortMote(m.name)}</MenuItem>
             ))}
           </TextField>
         </Stack>
         {scan && <ScanPreview result={scan} onClose={() => setScan(null)} />}
-        <Alert severity="info" sx={{ my: 1 }}>
-          The log never says which mote went into an upgrade. Rescan after upgrading.
-        </Alert>
+        <Alert severity="info" sx={{ my: 1 }}>The log never says which mote or fragment went into an upgrade. Rescan after upgrading.</Alert>
+        <Typography variant="body2" color="text.secondary">{FRAGMENT_NOTE}</Typography>
         <Table size="small" sx={{ width: 'auto' }}>
           <TableBody>
-            {MOTES.map((m) => (
+            <TableRow>
+              <TableCell>Grade</TableCell><TableCell align="right">Motes</TableCell><TableCell align="right">Fragments</TableCell>
+            </TableRow>
+            {MOTES.map((m, i) => (
               <TableRow key={m.name}>
                 <TableCell>{shortMote(m.name)}</TableCell>
                 <TableCell align="right">{held[m.name]}</TableCell>
+                <TableCell align="right" data-testid={`motes-fragments-${i}`}>{held[FRAGMENTS[i].name]}</TableCell>
               </TableRow>
             ))}
           </TableBody>

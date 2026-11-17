@@ -71,6 +71,48 @@ test('reads every row of the currencies window', async () => {
   assertReads(await reader.read(FIXTURE), EXPECTED)
 })
 
+// Owner capture, 2026-11-17, cropped to currency rows to exclude chat and player names.
+test('fragment currencies do not block saving mote and rune counts', async () => {
+  const image = readFileSync(join(import.meta.dirname, 'fixtures', 'currency-fragments.png'))
+  assertReads(await reader.read(image), {
+    'Wind Rune Azia': 18,
+    'Wind Rune Beza': 11,
+    'Wind Rune Caza': 11,
+    'Wind Rune Dena': 10,
+    'Wind Rune Ena': 13,
+    'Wind Rune Fana': 18,
+    'Wind Rune Geza': 6,
+    'Wind Rune Heda': 15,
+    'Wind Rune Izah': 11,
+    'Wind Rune Jaka': 16,
+    'Wind Rune Kala': 6,
+    'Wind Rune Lena': 12,
+    'Wind Rune Meda': 10,
+    'Wind Rune Neza': 13,
+    'Wind Rune Ozah': 8,
+    'Mote of Ascendant Potential': 1,
+    'Mote of Grand Potential': 2,
+    'Mote of Greater Potential': 52,
+    'Mote of Infinite Potential': 0,
+    'Mote of Infinitesimal Potential': 80,
+    'Mote of Lesser Potential': 23,
+    'Mote of Major Potential': 662,
+    'Mote of Minor Potential': 11,
+    'Mote of Potential': 6,
+    'Mote of Superior Potential': 13,
+    'Fragment of Ascendant Potential': 0,
+    'Fragment of Grand Potential': 0,
+    'Fragment of Greater Potential': 2,
+    'Fragment of Infinite Potential': 0,
+    'Fragment of Infinitesimal Potential': 0,
+    'Fragment of Lesser Potential': 17,
+    'Fragment of Major Potential': 6,
+    'Fragment of Minor Potential': 3,
+    'Fragment of Potential': 4,
+    'Fragment of Superior Potential': 0
+  })
+})
+
 // A live in-game capture (owner, 2026-10-24) with "Motes of Major Potential" selected: the
 // selected row sits on a light band that one global threshold cannot read alongside the rest.
 test('reads a live capture with a selected (highlighted) row', async () => {
@@ -184,7 +226,11 @@ test('currencies the window lists but the app does not track are recognised, ico
   for (const row of ['ESExpedient Delivery Vouchers', '®mExpedient Delivery Vouchers', '@Tokens of Reclamation', '@ Tokens of Reclamation']) {
     assert.ok(isUntrackedCurrency(row), row)
   }
-  assert.ok(!isUntrackedCurrency('@Motes of Greater Potential'))
+  for (const mote of MOTES) {
+    assert.ok(!isUntrackedCurrency(`@${mote.name.replace(/^Mote /, 'Motes ')}`), mote.name)
+    const fragment = mote.name.replace(/^Mote /, 'Fragment ')
+    assert.equal(matchCurrencyName(fragment.replace(/^Fragment /, '@Fragments '), currencyVocabulary()), fragment)
+  }
   assert.ok(!isUntrackedCurrency('® Beza Wind Runes. |'))
 })
 

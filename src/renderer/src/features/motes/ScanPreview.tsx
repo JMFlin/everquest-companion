@@ -1,10 +1,10 @@
 // ScanPreview — what the last scan read. A scan that read every row is already saved; one with an
-// unreadable row saved nothing. Only motes are shown; runes are scanned and saved but not listed.
+// unreadable row saved nothing. Motes and fragments are shown; runes are saved but not listed.
 
 import type { JSX } from 'react'
 import { Alert, Typography } from '@mui/material'
 import type { CurrencyScanError, CurrencyScanResult } from '@shared/currencyScan'
-import { MOTES } from '@shared/planner/motes'
+import { UPGRADE_CURRENCIES } from '@shared/planner/motes'
 import { shortMote } from './usePlanner'
 
 const ERRORS: Record<CurrencyScanError, string> = {
@@ -36,7 +36,7 @@ export function ScanPreview(props: { result: CurrencyScanResult; onClose: () => 
       </Alert>
     )
   }
-  const motes = MOTES.filter((m) => m.name in result.counts).map((m) => `${shortMote(m.name)} ${result.counts[m.name]}`)
+  const motes = UPGRADE_CURRENCIES.map((m) => `${shortMote(m.name)} ${result.counts[m.name] ?? 0}`)
   return (
     <Alert severity="success" onClose={props.onClose} sx={{ my: 1 }} data-testid="motes-scan-preview">
       {scanSummary(result)} Read: {motes.join(', ')}.

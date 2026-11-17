@@ -1,6 +1,6 @@
 // The closed set of names a currencies-window row may resolve to, and the OCR-text → name match.
 
-import { MOTES } from '../../shared/planner/motes'
+import { UPGRADE_CURRENCIES } from '../../shared/planner/motes'
 import type { ItemDbFile } from '../itemsDb'
 import itemsJson from '../data/items.json'
 
@@ -8,10 +8,10 @@ const WIND_RUNE_KEY = 'wind rune '
 
 let vocabulary: readonly string[] | null = null
 
-/** Every mote name plus every Wind Rune page title in the committed item corpus. */
+/** Every upgrade currency plus every Wind Rune page title in the committed item corpus. */
 export function currencyVocabulary(): readonly string[] {
   vocabulary ??= [
-    ...MOTES.map((m) => m.name),
+    ...UPGRADE_CURRENCIES.map((m) => m.name),
     ...Object.entries((itemsJson as unknown as ItemDbFile).items)
       .filter(([key]) => key.startsWith(WIND_RUNE_KEY))
       .map(([, entry]) => entry.page)
@@ -42,7 +42,7 @@ export function normalizeRowText(text: string): string {
     .trim()
   const rune = /^(\S+) Wind Runes?$/i.exec(t)
   if (rune) return `Wind Rune ${rune[1]}`
-  return t.replace(/^\S*otes of /i, 'Mote of ')
+  return t.replace(/^\S*otes of /i, 'Mote of ').replace(/^\S*ragments? of /i, 'Fragment of ')
 }
 
 /**

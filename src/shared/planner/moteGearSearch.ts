@@ -3,13 +3,13 @@
 // The search behind planGear in motes.ts (see ALLOCATION there): a DP over the pool, the piece
 // and every copy, tier by tier, exact while it stays under KEEP states per step.
 
-import { CONDENSE_MAX_INDEX, MAX_XP, MOTES, cumXp, mergeXp, startXp, stateAt } from './moteXp'
+import { CONDENSE_MAX_INDEX, GEAR_CURRENCIES, MAX_XP, MOTES, UPGRADE_CURRENCIES, cumXp, mergeXp, startXp, stateAt } from './moteXp'
 import type { GearSelection } from './motes'
 
 type Op =
   | { kind: 'apply'; mote: number; count: number }
   /** Motes onto one spare copy that was at `xp` when the tier started. */
-  | { kind: 'level'; mote: number; xp: number; count: number }
+  | { kind: 'level'; mote: number; xp: number; itemXp: number; count: number }
   | { kind: 'merge'; tier: number; count: number }
 
 interface DpNode {
@@ -42,7 +42,7 @@ function extend(node: DpNode, op: Op, cost: Cost): DpNode {
 
 /** The cost of applying `count` of tier `mote`. */
 function spent(mote: number, count: number): Cost {
-  const { spellXp } = MOTES[mote]
+  const { spellXp } = UPGRADE_CURRENCIES[mote]
   return { value: count * spellXp, tierCost: count * spellXp ** 2, spareXp: 0 }
 }
 
@@ -59,6 +59,7 @@ function room(xp: number, stop: number, limit: number, itemXp: number): number {
  */
 interface Entry {
   pool: number
+  carry: number
   piece: number
   spares: number[]
   prevStart: number
@@ -72,7 +73,7 @@ interface Entry {
  * condenses, and an unused mote costs nothing.
  */
 function keepBetter(layer: Map<string, Entry[]>, entry: Entry): void {
-  const key = `${entry.piece}|${entry.spares.join(',')}|${entry.prevStart}|${entry.prevUsed}`
+  const key = `${entry.piece}|${entry.spares.join(',')}|${entry.prevStart}|${entry.prevUsed}|${entry.carry}`
   const front = layer.get(key) ?? []
   if (front.some((e) => e.pool >= entry.pool && !cheaper(entry.node, e.node))) return
   layer.set(key, [...front.filter((e) => !(entry.pool >= e.pool && !cheaper(e.node, entry.node))), entry])
@@ -92,13 +93,17 @@ const KEEP = 300
  * held(n+1)) pairs from tier n. Clamping to these bounds changes no optimum.
  */
 function usefulBounds(counts: number[], condense: boolean, items: number): { held: number[]; pairs: number[] } {
-  const useful: number[] = MOTES.map(() => 0)
+  const useful: number[] = UPGRADE_CURRENCIES.map(() => 0)
   const pairs: number[] = MOTES.map(() => 0)
   for (let i = MOTES.length - 1; i >= 0; i--) {
     const m = MOTES[i]
     const applications = items * Math.min(Math.ceil(cumXp(m.itemCap + 1) / m.itemXp), Math.floor(MAX_XP / m.itemXp))
     pairs[i] = condense && i < CONDENSE_MAX_INDEX ? Math.max(0, useful[i + 1] - counts[i + 1]) : 0
     useful[i] = applications + 2 * pairs[i]
+  }
+  for (const m of GEAR_CURRENCIES) {
+    if (m.index < MOTES.length) continue
+    useful[m.index] = items * Math.min(Math.ceil(cumXp(m.itemCap + 1) / m.itemXp), Math.floor(MAX_XP / m.itemXp))
   }
   return { held: counts.map((c, i) => Math.min(c, useful[i])), pairs }
 }
@@ -108,6 +113,21 @@ export function fewestPairs(counts: number[], used: number[]): number[] {
   const pairs: number[] = MOTES.map(() => 0)
   for (let i = MOTES.length - 1; i > 0; i--) pairs[i - 1] = Math.max(0, used[i] + 2 * pairs[i] - counts[i])
   return pairs
+}
+
+/** Preserve condensed motes while a same-cap fragment stage spends its independent pool. */
+function advanceCurrency(e: Entry, stage: number, pairs: readonly number[]): Entry {
+  const i = GEAR_CURRENCIES[stage].index
+  const condensed = i < MOTES.length ? Math.min(Math.floor(e.pool / 2), pairs[i]) : e.carry
+  const nextIsFragment = GEAR_CURRENCIES[stage + 1]?.index >= MOTES.length
+  return {
+    ...e,
+    pool: nextIsFragment ? 0 : condensed,
+    carry: nextIsFragment ? condensed : 0,
+    spares: [...e.spares].sort((a, b) => a - b),
+    prevStart: -1,
+    prevUsed: 0
+  }
 }
 
 export interface GearDp {
@@ -140,11 +160,12 @@ export function gearDp(counts: number[], sel: GearSelection, spares: readonly nu
   const promise = (t: number, slot: number, fresh: boolean, e: Entry): [number, number] => {
     let gap = target - e.piece - e.spares.reduce((n, xp) => n + mergeXp(stateAt(xp).full), 0)
     let value = e.node.value
-    for (let u = t; u < MOTES.length && gap > 0; u++) {
-      const m = MOTES[u]
+    for (let u = t; u < GEAR_CURRENCIES.length && gap > 0; u++) {
+      const m = GEAR_CURRENCIES[u]
+      const i = m.index
       const capLimit = cumXp(m.itemCap + 1)
       const own =
-        u > t || fresh ? bounds.held[u] + (u > 0 ? 2 * bounds.pairs[u - 1] : 0) + (u === t ? e.pool : 0) : e.pool
+        u > t || fresh ? bounds.held[i] + (i > 0 && i < MOTES.length ? 2 * bounds.pairs[i - 1] : 0) + (u === t ? e.pool : 0) : e.pool
       const from = u > t || fresh ? 0 : slot
       let fits = from === 0 ? room(e.piece, Math.min(capLimit, target), MAX_XP, m.itemXp) : 0
       for (let k = Math.max(0, from - 1); k < e.spares.length; k++)
@@ -170,15 +191,17 @@ export function gearDp(counts: number[], sel: GearSelection, spares: readonly nu
   const sorted = spares.map(cumXp).sort((a, b) => a - b)
   keepBetter(layer, {
     pool: 0,
+    carry: 0,
     piece: startXp(sel),
     spares: sorted,
     prevStart: -1,
     prevUsed: 0,
     node: start
   })
-  MOTES.forEach((mote, i) => {
+  GEAR_CURRENCIES.forEach((mote, stage) => {
+    const i = mote.index
     const capLimit = cumXp(mote.itemCap + 1)
-    const condensing = 2 * bounds.pairs[i]
+    const condensing = i < MOTES.length ? 2 * bounds.pairs[i] : 0
     const spareRoom = (xp: number): number => room(xp, capLimit, MAX_XP - 1, mote.itemXp)
     let next = new Map<string, Entry[]>()
     for (const e of [...layer.values()].flat()) {
@@ -195,7 +218,7 @@ export function gearDp(counts: number[], sel: GearSelection, spares: readonly nu
         })
       }
     }
-    layer = prune(next, i, 1)
+    layer = prune(next, stage, 1)
     for (let k = 0; k < spares.length; k++) {
       next = new Map()
       for (const e of [...layer.values()].flat()) {
@@ -203,12 +226,13 @@ export function gearDp(counts: number[], sel: GearSelection, spares: readonly nu
         const later = e.spares.slice(k + 1).reduce((n, x) => n + spareRoom(x), condensing)
         const twin = xp === e.prevStart ? e.prevUsed : Infinity
         for (let u = 0; u <= Math.min(e.pool, spareRoom(xp), twin); u++) {
-          const op: Op = { kind: 'level', mote: i, xp, count: u }
+          const op: Op = { kind: 'level', mote: i, xp, itemXp: mote.itemXp, count: u }
           const levelled = [...e.spares]
           levelled[k] = xp + u * mote.itemXp
           const node = u === 0 ? e.node : extend(e.node, op, spent(i, u))
           keepBetter(next, {
             pool: Math.min(e.pool - u, later),
+            carry: e.carry,
             piece: e.piece,
             spares: levelled,
             prevStart: xp,
@@ -217,20 +241,13 @@ export function gearDp(counts: number[], sel: GearSelection, spares: readonly nu
           })
         }
       }
-      layer = prune(next, i, k + 2)
+      layer = prune(next, stage, k + 2)
     }
     next = new Map()
     for (const e of [...layer.values()].flat()) {
-      const pool = Math.min(Math.floor(e.pool / 2), bounds.pairs[i])
-      keepBetter(next, {
-        ...e,
-        pool,
-        spares: [...e.spares].sort((a, b) => a - b),
-        prevStart: -1,
-        prevUsed: 0
-      })
+      keepBetter(next, advanceCurrency(e, stage, bounds.pairs))
     }
-    layer = prune(next, i + 1, 0, true)
+    layer = prune(next, stage + 1, 0, true)
   })
 
   return assign(cheapestMerge([...layer.values()].flat(), target), spares)
@@ -285,8 +302,8 @@ function assign(best: DpNode, spares: readonly number[]): GearDp {
   // Replay to hand each levelling to a concrete copy: one at that XP when the tier started and not
   // yet given this tier. Merges take the levelled copies of a tier first.
   const dp: GearDp = {
-    piece: MOTES.map(() => 0),
-    spare: spares.map(() => MOTES.map(() => 0)),
+    piece: UPGRADE_CURRENCIES.map(() => 0),
+    spare: spares.map(() => UPGRADE_CURRENCIES.map(() => 0)),
     merged: []
   }
   const xp = spares.map(cumXp)
@@ -315,7 +332,7 @@ function assign(best: DpNode, spares: readonly number[]): GearDp {
     const j = spares.findIndex((_, c) => tierStart[c] === op.xp && !given.has(c))
     given.add(j)
     dp.spare[j][op.mote] = op.count
-    xp[j] += op.count * MOTES[op.mote].itemXp
+    xp[j] += op.count * op.itemXp
   }
   return dp
 }

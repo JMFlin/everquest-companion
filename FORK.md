@@ -10,6 +10,14 @@ Game: save EverQuest's `UI_*.ini` files under a name per screen and apply one be
 [`src/shared/uiLayouts.ts`](src/shared/uiLayouts.ts)), and the build changes below. These
 changes are not headed upstream, so the fork tracks upstream by merging, not by sending PRs.
 
+The currency scanner saves mote, fragment, and Wind Rune counts. Both Motes surfaces show the
+two upgrade currency families separately and plan from a shared pool, gear before spells.
+Fragment spell XP and item caps follow the [wiki Mote Guide](https://eqlwiki.com/Mote_Guide#Fragments_of_Potential_Tiers).
+Only Major and Greater fragment item XP is verified, at 8 and 11, so other grades remain available
+for spells but are excluded from gear plans. Infinite spell fragments exceed the planner's
+1,023 XP ceiling and remain unused until their overflow behavior is verified. Fragment condensing
+is excluded because the November 17 quest's conversion ratio is not documented.
+
 ## Building and installing
 
 ```powershell
