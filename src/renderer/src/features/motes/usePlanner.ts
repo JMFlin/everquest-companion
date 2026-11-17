@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from 'react'
 import { MOTES, planMotes } from '@shared/planner/motes'
-import type { MoteName, MotePlan, Selection, Step, StepGroup } from '@shared/planner/motes'
+import type { UpgradeCurrencyName, MotePlan, Selection, Step, StepGroup } from '@shared/planner/motes'
 
 export interface RankPick {
   sel?: Selection
@@ -12,6 +12,8 @@ export interface RankPick {
 }
 
 export const RANKS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+export const FRAGMENT_NOTE = 'Gear plans use Major and Greater fragments. Other fragment gear XP is unverified. Fragment condensing and Infinite spell fragments are not planned.'
 
 /** First click picks the current rank, the second the goal; a click at or below `from` restarts. */
 function nextPick(pick: RankPick, n: number): RankPick {
@@ -42,7 +44,7 @@ export interface Planner {
   setMaxMote: (maxMote: number) => void
 }
 
-export function usePlanner(held: Partial<Record<MoteName, number>>): Planner {
+export function usePlanner(held: Partial<Record<UpgradeCurrencyName, number>>): Planner {
   const [spell, setSpell] = useState<RankPick>({ pending: null })
   const [gear, setGear] = useState<RankPick>({ pending: null })
   // Banked XP belongs to the rank/tier it was entered for; picking a new current one resets it to 0.
@@ -96,8 +98,9 @@ export function pickLabel(pick: RankPick): string {
   return pick.pending !== null ? `from ${pick.pending}, pick goal` : 'pick current rank'
 }
 
-export function shortMote(name: MoteName): string {
-  return name.replace(/^Mote of /, '').replace(/ Potential$/, '')
+export function shortMote(name: UpgradeCurrencyName): string {
+  const grade = name.replace(/^(Mote|Fragment) of /, '').replace(/ Potential$/, '')
+  return name.startsWith('Fragment') ? `${grade} fragment` : grade
 }
 
 /** A step's line inside its group; a spare's steps carry no spare label, their group header does. */

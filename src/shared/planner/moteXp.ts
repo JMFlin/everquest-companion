@@ -25,6 +25,27 @@ export const MOTES = [
 ] as const
 
 export type MoteName = (typeof MOTES)[number]['name']
+export type FragmentName = MoteName extends `Mote of ${infer Grade}` ? `Fragment of ${Grade}` : never
+export type UpgradeCurrencyName = MoteName | FragmentName
+
+// https://eqlwiki.com/Mote_Guide#Fragments_of_Potential_Tiers lists only Major/Greater item XP.
+export const FRAGMENTS = MOTES.map((m) => ({
+  name: m.name.replace(/^Mote of /, 'Fragment of ') as FragmentName,
+  itemXp: m.itemCap === 4 ? 8 : m.itemCap === 5 ? 11 : null,
+  itemCap: m.itemCap,
+  spellXp: m.spellXp * 2
+}))
+
+export const UPGRADE_CURRENCIES = [...MOTES, ...FRAGMENTS]
+
+/** Gear currencies in cap order; unknown fragment item XP cannot enter the search. */
+export const GEAR_CURRENCIES = MOTES.flatMap((m, i) => {
+  const fragment = FRAGMENTS[i]
+  return [
+    { ...m, index: i },
+    ...(fragment.itemXp === null ? [] : [{ ...fragment, itemXp: fragment.itemXp, index: MOTES.length + i }])
+  ]
+})
 
 /** Highest tier index condensing may produce (Ascendant). */
 export const CONDENSE_MAX_INDEX = 8

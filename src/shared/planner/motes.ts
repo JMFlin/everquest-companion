@@ -9,12 +9,14 @@
 // - XP overflow carries into the next rank, for spells and gear alike.
 // - Spells: any mote at any rank, worth `spellXp`.
 // - Gear: a mote applies only while the item's CURRENT tier <= `itemCap`, worth `itemXp`.
+// - Fragments share mote caps and give double spell XP. Gear uses only measured Major (8) and
+//   Greater (11) fragment XP; other grades remain unused for gear. Fragments never condense.
 // - Gear merge: a spare copy of the same item at tier t merges in for 2^t XP (eqlwiki
 //   Item_Upgrade_System, Gear Merge Experience: +0 -> 1 ... +9 -> 512), with no tier cap.
 // - Condense: 2 motes of tier n -> 1 of tier n+1, producing at most Ascendant. Spell value is
 //   conserved by condensing (spellXp doubles per tier); gear XP is lost or kept, never gained —
 //   condensing only ever helps gear by raising the cap. Off unless the gear selection opts in.
-// - Mote cap: `maxMote` (an index into MOTES) keeps every held mote above it out of the pool; they
+// - Mote cap: `maxMote` (an index into MOTES) excludes both currency families above that grade; they
 //   stay in `remaining`. Condensing may still build higher tiers out of the motes below it.
 //
 // ALLOCATION (one shared pool)
@@ -34,9 +36,9 @@
 import type { ItemUpgradeState } from '../itemUpgrade'
 import { ITEM_MAX_TIER, expToNextTier } from '../itemStats'
 import { fewestPairs, gearDp } from './moteGearSearch'
-import { MAX_XP, MOTES, SPARE_MAX_TIER, cumXp, mergeXp, startXp, stateAt, type MoteName } from './moteXp'
+import { GEAR_CURRENCIES, MAX_XP, MOTES, UPGRADE_CURRENCIES, SPARE_MAX_TIER, cumXp, mergeXp, startXp, stateAt, type MoteName, type UpgradeCurrencyName } from './moteXp'
 
-export { MOTES, SPARE_MAX_TIER, mergeXp, type MoteName } from './moteXp'
+export { MOTES, FRAGMENTS, UPGRADE_CURRENCIES, SPARE_MAX_TIER, mergeXp, type MoteName, type FragmentName, type UpgradeCurrencyName } from './moteXp'
 
 export interface Selection {
   from: number
@@ -54,13 +56,13 @@ export interface GearSelection extends Selection {
 
 export type Step =
   | { kind: 'condense'; mote: MoteName; pairs: number; into: MoteName }
-  | { kind: 'apply'; mote: MoteName; count: number; after: ItemUpgradeState }
+  | { kind: 'apply'; mote: UpgradeCurrencyName; count: number; after: ItemUpgradeState }
   /** Motes onto spare copy `spare` (index into the gear selection's spares, at tier `from`) before it merges. */
   | {
       kind: 'level'
       spare: number
       from: number
-      mote: MoteName
+      mote: UpgradeCurrencyName
       count: number
       after: ItemUpgradeState
     }
@@ -85,7 +87,7 @@ export interface SectionPlan {
 export interface MotePlan {
   spell?: SectionPlan
   gear?: SectionPlan
-  remaining: Record<MoteName, number>
+  remaining: Record<UpgradeCurrencyName, number>
 }
 
 function validateSelection(sel: Selection, label: string): void {
@@ -124,12 +126,14 @@ function spend(steps: Step[], counts: number[], used: number[]): void {
       })
     counts[i] += (i > 0 ? pairs[i - 1] : 0) - 2 * pairs[i] - used[i]
   })
+  for (let i = MOTES.length; i < counts.length; i++) counts[i] -= used[i]
 }
 
 /** Spare `j`'s levelling steps from tier `from`; returns the tier it reaches. */
 function levelSteps(steps: Step[], j: number, from: number, used: number[]): number {
   let xp = cumXp(from)
-  MOTES.forEach((mote, i) => {
+  GEAR_CURRENCIES.forEach((mote) => {
+    const i = mote.index
     if (used[i] === 0) return
     xp += used[i] * mote.itemXp
     steps.push({
@@ -152,11 +156,12 @@ function planGear(counts: number[], sel: GearSelection): SectionPlan {
   spend(
     steps,
     counts,
-    MOTES.map((_, i) => dp.spare.reduce((n, used) => n + used[i], dp.piece[i]))
+    UPGRADE_CURRENCIES.map((_, i) => dp.spare.reduce((n, used) => n + used[i], dp.piece[i]))
   )
   const tiers = spares.map((t, j) => levelSteps(steps, j, t, dp.spare[j]))
   let xp = startXp(sel)
-  MOTES.forEach((mote, i) => {
+  GEAR_CURRENCIES.forEach((mote) => {
+    const i = mote.index
     if (dp.piece[i] === 0) return
     xp += dp.piece[i] * mote.itemXp
     steps.push({
@@ -184,31 +189,35 @@ function planGear(counts: number[], sel: GearSelection): SectionPlan {
 function planSpell(counts: number[], sel: Selection): SectionPlan {
   const target = cumXp(sel.to)
   let xp = startXp(sel)
-  const used: number[] = MOTES.map(() => 0)
-  for (let i = MOTES.length - 1; i >= 0; i--) {
-    used[i] = Math.min(counts[i], Math.floor((target - xp) / MOTES[i].spellXp))
-    xp += used[i] * MOTES[i].spellXp
+  const used: number[] = UPGRADE_CURRENCIES.map(() => 0)
+  const order = UPGRADE_CURRENCIES.map((m, i) => i).sort(
+    (a, b) => UPGRADE_CURRENCIES[a].spellXp - UPGRADE_CURRENCIES[b].spellXp || a - b
+  )
+  for (const i of [...order].reverse()) {
+    used[i] = Math.min(counts[i], Math.floor((target - xp) / UPGRADE_CURRENCIES[i].spellXp))
+    xp += used[i] * UPGRADE_CURRENCIES[i].spellXp
   }
   if (xp < target) {
-    const finisher = MOTES.findIndex(
-      (m, i) => counts[i] > used[i] && xp + m.spellXp >= target && xp + m.spellXp <= MAX_XP
+    const finisher = order.findIndex(
+      (i) => counts[i] > used[i] && xp + UPGRADE_CURRENCIES[i].spellXp >= target && xp + UPGRADE_CURRENCIES[i].spellXp <= MAX_XP
     )
     if (finisher >= 0) {
-      used[finisher]++
-      xp += MOTES[finisher].spellXp
+      const i = order[finisher]
+      used[i]++
+      xp += UPGRADE_CURRENCIES[i].spellXp
     }
   }
 
   // Listed smallest first, like gear's (whose order the tier caps force); a spell's order is free.
   const steps: Step[] = []
   let running = startXp(sel)
-  for (let i = 0; i < MOTES.length; i++) {
+  for (const i of order) {
     if (used[i] === 0) continue
     counts[i] -= used[i]
-    running += used[i] * MOTES[i].spellXp
+    running += used[i] * UPGRADE_CURRENCIES[i].spellXp
     steps.push({
       kind: 'apply',
-      mote: MOTES[i].name,
+      mote: UPGRADE_CURRENCIES[i].name,
       count: used[i],
       after: stateAt(running)
     })
@@ -228,7 +237,7 @@ function section(sel: Selection, steps: Step[], xp: number, target: number): Sec
 }
 
 export function planMotes(
-  held: Partial<Record<MoteName, number>>,
+  held: Partial<Record<UpgradeCurrencyName, number>>,
   sel: { spell?: Selection; gear?: GearSelection },
   maxMote: number = MOTES.length - 1
 ): MotePlan {
@@ -240,12 +249,12 @@ export function planMotes(
   if (!Number.isInteger(maxMote) || maxMote < 0 || maxMote >= MOTES.length) {
     throw new Error(`maxMote must be an integer 0..${MOTES.length - 1}, got ${maxMote}`)
   }
-  const counts = MOTES.map((m, i) => (i <= maxMote ? (held[m.name] ?? 0) : 0))
+  const counts = UPGRADE_CURRENCIES.map((m) => (m.itemCap <= maxMote ? (held[m.name] ?? 0) : 0))
   const gear = sel.gear ? planGear(counts, sel.gear) : undefined
   const spell = sel.spell ? planSpell(counts, sel.spell) : undefined
   const remaining = Object.fromEntries(
-    MOTES.map((m, i) => [m.name, counts[i] + (i > maxMote ? (held[m.name] ?? 0) : 0)])
-  ) as Record<MoteName, number>
+    UPGRADE_CURRENCIES.map((m, i) => [m.name, counts[i] + (m.itemCap > maxMote ? (held[m.name] ?? 0) : 0)])
+  ) as Record<UpgradeCurrencyName, number>
   return { ...(spell ? { spell } : {}), ...(gear ? { gear } : {}), remaining }
 }
 
